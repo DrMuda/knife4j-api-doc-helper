@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档生成参数TS类型
 // @namespace    http://tampermonkey.net/
-// @version      2024-05-20
+// @version      2024-05-21
 // @description  try to take over the world!
 // @author       You
 // @match        https://e-commerce.xiaofeilun.cn/e-commerce-api/doc.html
@@ -31,54 +31,172 @@ const waitime = (time: number) => {
 };
 
 async function run() {
-  const setBtnSuccess = await setMyDom();
-  if (!setBtnSuccess) return;
+  const tabList = (
+    await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
+  )?.[0];
+  if (!tabList) {
+    message.error("没有找到对应内容");
+    return;
+  }
+
+  const onTabListChange = debounce(async () => {
+    // 找到当前显示的tab
+    const activeTabanelList = await waitElement(
+      ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
+      10,
+      0.5
+    );
+
+    if (!activeTabanelList || activeTabanelList.length <= 0) {
+      message.error("没有找到激活中的tab");
+      return;
+    }
+    setMyDom(activeTabanelList[0]);
+  }, 200);
+
+  // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
+  const observer = new MutationObserver(onTabListChange);
+  const config = { attributes: true, childList: true, subtree: true };
+  observer.observe(tabList, config);
 }
 
-async function setMyDom() {
-  // 获取新增Dom的指定位置
-  let loopCount = 0;
-  let targetDom: null | Element = null;
-  while (loopCount <= 60) {
-    targetDom = document.getElementsByClassName("api-title")?.[0];
-    if (targetDom) break;
-    loopCount++;
-    await waitime(1000);
+// 等待元素加载完成并返回， 没有则返回null
+async function waitElement(
+  selector: string,
+  /** 超时时间 X秒 */
+  timeout: number,
+  /** 检测频率 X秒/次 */
+  frequency: number,
+  parentElement?: Element
+) {
+  let targetElementList: null | Element[] = null;
+  let count = 0;
+  for (let i = 0; i < timeout / frequency; i++) {
+    if (count * frequency > timeout) break;
+    targetElementList = parentElement
+      ? Array.from(parentElement.querySelectorAll(selector))
+      : Array.from(document.querySelectorAll(selector));
+    if (targetElementList && targetElementList.length > 0) {
+      return targetElementList;
+    }
+    await waitime(1000 * frequency);
   }
+  return null;
+}
+
+// 防抖函数
+function debounce<T>(callback: (...args: T[]) => void, wait: number) {
+  let timer = null;
+  return (...args: T[]) => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    timer = setTimeout(() => callback(...args), wait);
+  };
+}
+
+// 设置复制按钮、文本框 等等dom
+async function setMyDom(parentDom: Element) {
+  // 获取新增Dom的指定位置
+  const targetDom = (
+    await waitElement(".knife4j-api-title", 10, 0.5, parentDom)
+  )?.[0];
   if (!targetDom) {
-    message.warn("没找到api-title");
+    message.warn("没找到knife4j-api-title");
     return false;
   }
 
+  const titleContian = targetDom.parentElement;
+  const documentDom = targetDom.parentElement.parentElement;
+  if (!documentDom) {
+    message.error("没找到 document 容器");
+    return;
+  }
+
+  const containClass = "ts-type-contain";
+  const refreshBtnClass = "refresh-btn";
+
   // 设置容器
-  const contain = document.createElement("div");
-  const refreshBtn = document.createElement("button");
+  const contain =
+    documentDom.querySelector(`.${containClass}`) ||
+    document.createElement("div");
+  const refreshBtn = (documentDom.querySelector(`.${refreshBtnClass}`) ||
+    document.createElement("button")) as HTMLButtonElement;
+
+  contain.className = containClass;
+  refreshBtn.className = refreshBtnClass;
+
+  contain.remove();
+  refreshBtn.remove();
+
   contain.setAttribute("style", "display: flex;");
   refreshBtn.innerText = "刷新";
-  targetDom.parentElement!.insertBefore(refreshBtn, targetDom);
-  targetDom.parentElement!.insertBefore(contain, targetDom);
+  documentDom.insertBefore(contain, titleContian.nextSibling);
+  documentDom.insertBefore(refreshBtn, titleContian.nextSibling);
 
   const setTsTypeContent = () => {
-    const requestType = createTsTypeByTarget("请求参数", {
-      fieldName: 0,
-      annotation: 1,
-      type: 4,
-      schema: 5,
-    });
-    const responeType = createTsTypeByTarget("响应参数", {
-      fieldName: 0,
-      annotation: 1,
-      type: 2,
-      schema: 3,
-    });
-    const requestTypeContain = document.createElement("div");
-    const responeTypeContain = document.createElement("div");
-    const copyRequestTypeBtn = document.createElement("button");
-    const copyResponeTypeBtn = document.createElement("button");
+    const requestType = createTsTypeByTarget(
+      "请求参数",
+      {
+        fieldName: 0,
+        annotation: 1,
+        type: 4,
+        schema: 5,
+      },
+      documentDom
+    );
+    const responeType = createTsTypeByTarget(
+      "响应参数",
+      {
+        fieldName: 0,
+        annotation: 1,
+        type: 2,
+        schema: 3,
+      },
+      documentDom
+    );
+
+    const requestTypeContainClass = "request-type-contain";
+    const responeTypeContainClass = "respone-type-contain";
+    const copyRequestTypeBtnClass = "copy-request-type-btn";
+    const copyResponeTypeBtnClass = "copy-respone-type-btn";
+    const requestTypeContentClass = "request-type-content";
+    const responeTypeContentClass = "respone-type-content";
+
+    const requestTypeContain =
+      documentDom.querySelector(`.${requestTypeContainClass}`) ||
+      document.createElement("div");
+
+    const responeTypeContain =
+      documentDom.querySelector(`.${responeTypeContainClass}`) ||
+      document.createElement("div");
+
+    const copyRequestTypeBtn = (documentDom.querySelector(
+      `.${copyRequestTypeBtnClass}`
+    ) || document.createElement("button")) as HTMLButtonElement;
+
+    const copyResponeTypeBtn = (documentDom.querySelector(
+      `.${copyResponeTypeBtnClass}`
+    ) || document.createElement("button")) as HTMLButtonElement;
+
+    const requestTypeContent = (documentDom.querySelector(
+      `.${requestTypeContentClass}`
+    ) || document.createElement("code")) as HTMLDivElement;
+
+    const responeTypeContent = (documentDom.querySelector(
+      `.${responeTypeContentClass}`
+    ) || document.createElement("code")) as HTMLDivElement;
+
+    requestTypeContain.className = requestTypeContainClass;
+    responeTypeContain.className = responeTypeContainClass;
+    copyRequestTypeBtn.className = copyRequestTypeBtnClass;
+    copyResponeTypeBtn.className = copyResponeTypeBtnClass;
+    requestTypeContent.className = requestTypeContentClass;
+    responeTypeContent.className = responeTypeContentClass;
+
     copyRequestTypeBtn.innerText = "复制请求参数";
     copyResponeTypeBtn.innerText = "复制响应参数";
-    const requestTypeContent = document.createElement("code");
-    const responeTypeContent = document.createElement("code");
     requestTypeContent.innerText = requestType || "";
     responeTypeContent.innerText = responeType || "";
 
@@ -122,7 +240,7 @@ async function setMyDom() {
   refreshBtn.onclick = refresh;
   for (let i = 0; i < 3; i++) {
     refresh();
-    await waitime(1000);
+    await waitime(500);
   }
 
   return true;
@@ -131,10 +249,11 @@ async function setMyDom() {
 // 根据类型创建tsType
 function createTsTypeByTarget(
   targetInnertext: string,
-  colNumConfig: ColNumConfig
+  colNumConfig: ColNumConfig,
+  parentElement: Element
 ) {
   const titleDomList = Array.from(
-    document.getElementsByClassName("api-title")
+    parentElement.getElementsByClassName("api-title")
   ) as HTMLDivElement[];
   const requestParamsTitleIndex = titleDomList.findIndex(
     (dom) => dom.innerText === targetInnertext
@@ -210,9 +329,6 @@ function createTsTypeFromTrTree(
     const type = tdList[colNumConfig.type].innerText;
     const schema = tdList[colNumConfig.schema].innerText;
     tsTypeStr += `${indent}/** ${annotation} */\n`;
-    if (fieldName === "userList") {
-      console.log(children, trTree);
-    }
     if (children.length > 0) {
       const childType = createTsTypeFromTrTree(
         children,
