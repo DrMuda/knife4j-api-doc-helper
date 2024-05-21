@@ -15,7 +15,6 @@ const waitime = (time) => {
   });
 };
 async function run() {
-  await waitime(1000);
   const setBtnSuccess = await setMyDom();
   if (!setBtnSuccess) return;
 }
@@ -93,11 +92,15 @@ async function setMyDom() {
       message.success("复制响应参数成功");
     };
   };
-  setTsTypeContent();
-  refreshBtn.onclick = () => {
+  const refresh = () => {
     contain.innerHTML = "";
     setTsTypeContent();
   };
+  refreshBtn.onclick = refresh;
+  for (let i = 0; i < 3; i++) {
+    refresh();
+    await waitime(1000);
+  }
   return true;
 }
 // 根据类型创建tsType
@@ -124,49 +127,34 @@ function createTsTypeByTarget(targetInnertext, colNumConfig) {
 }
 // 将嵌套表格转成树形结构
 function createTrTree(trList) {
+  // 初始化栈
   const stack = [];
-  let currentLevel = 0;
-  trList.forEach((tr) => {
-    const level1 = getTrLevel(tr);
-    if (level1 >= currentLevel) {
-      stack.push({ ele: tr });
-    } else {
-      const newChildren = [];
-      while (true) {
-        const { ele: tr, children } = stack.pop();
-        const level2 = getTrLevel(tr);
-        if (level2 !== level1) {
-          newChildren.unshift({ ele: tr, children });
-        } else {
-          const node = { ele: tr, children: newChildren };
-          stack.push(node);
-          break;
-        }
-      }
-      stack.push({ ele: tr });
-    }
-    currentLevel = level1;
-  });
-  if (stack.length <= 0) return;
-  let newChildren = [];
-  let prevLevel = getTrLevel(stack.at(-1).ele);
-  while (true) {
-    if (stack.length <= 0) break;
-    const { ele: tr, children } = stack.pop();
+  // 初始化结果树
+  const tree = [];
+  for (const tr of trList) {
+    // 当前处理的项
     const level = getTrLevel(tr);
-    if (level <= 0) {
-      stack.push({ ele: tr, children: newChildren });
-      break;
+    const currentItem = { ele: tr, level };
+    // 如果栈为空，或者当前项的层级小于或等于栈顶项的层级
+    // 则需要从栈中弹出元素直到栈为空或者栈顶项的层级小于当前项的层级
+    while (stack.length && stack[stack.length - 1].level >= currentItem.level) {
+      stack.pop();
     }
-    if (prevLevel !== level) {
-      stack.push({ ele: tr, children: newChildren });
-      newChildren = [];
+    // 如果栈为空，说明当前项是根节点之一，直接加入结果树
+    if (stack.length === 0) {
+      tree.push(currentItem);
     } else {
-      newChildren.unshift({ ele: tr, children });
+      // 否则，当前项是栈顶项的子节点，加入栈顶项的 children 数组
+      const parent = stack[stack.length - 1];
+      if (!parent.children) {
+        parent.children = [];
+      }
+      parent.children.push(currentItem);
     }
-    prevLevel = level;
+    // 将当前项推入栈中
+    stack.push(currentItem);
   }
-  return stack;
+  return tree;
 }
 // 从树形tr创建tsType字符串
 function createTsTypeFromTrTree(
@@ -185,13 +173,20 @@ function createTsTypeFromTrTree(
     const type = tdList[colNumConfig.type].innerText;
     const schema = tdList[colNumConfig.schema].innerText;
     tsTypeStr += `${indent}/** ${annotation} */\n`;
+    if (fieldName === "userList") {
+      console.log(children, trTree);
+    }
     if (children.length > 0) {
       const childType = createTsTypeFromTrTree(
         children,
         colNumConfig,
         level + 1
       );
-      tsTypeStr += `${indent}${fieldName}: ${childType}\n`;
+      if (type === "array") {
+        tsTypeStr += `${indent}${fieldName}: ${childType}[]\n`;
+      } else {
+        tsTypeStr += `${indent}${fieldName}: ${childType}\n`;
+      }
     } else {
       if (type === "array" && schema) {
         const tsType = javaTypeToTsType(schema);
@@ -216,6 +211,7 @@ function javaTypeToTsType(javaType) {
   if (javaType === "string") return "string";
   if (javaType.includes("integer")) return "number";
   if (javaType === "boolean") return "boolean";
+  if (javaType === "file") return "File";
   return "unknownType";
 }
 // message弹窗
