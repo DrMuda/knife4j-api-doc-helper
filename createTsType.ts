@@ -275,7 +275,7 @@ function createTsTypeByTarget(
     .getElementsByTagName("tr");
   const tree = createTrTree(Array.from(trList));
   const tsType = createTsTypeFromTrTree(tree || [], colNumConfig);
-  return tsType;
+  return `interface Data ${tsType}`;
 }
 
 // 将嵌套表格转成树形结构
