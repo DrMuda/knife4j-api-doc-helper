@@ -99,12 +99,14 @@ async function setMyDom(parentDom) {
         const requestType = createTsTypeByTarget("请求参数", {
             fieldName: 0,
             annotation: 1,
+            isRequired: 3,
             type: 4,
             schema: 5,
         }, documentDom);
         const responeType = createTsTypeByTarget("响应参数", {
             fieldName: 0,
             annotation: 1,
+            isRequired: -1,
             type: 2,
             schema: 3,
         }, documentDom);
@@ -233,28 +235,31 @@ colNumConfig, level = 1) {
     const indent = new Array(level * 2).fill(" ").join("");
     for (const { ele, children = [] } of trTree) {
         const tdList = Array.from(ele.getElementsByTagName("td"));
-        const fieldName = tdList[colNumConfig.fieldName].innerText;
-        const annotation = tdList[colNumConfig.annotation].innerText;
-        const type = tdList[colNumConfig.type].innerText;
-        const schema = tdList[colNumConfig.schema].innerText;
+        const fieldName = tdList[colNumConfig.fieldName]?.innerText;
+        const annotation = tdList[colNumConfig.annotation]?.innerText;
+        const isRequired = tdList[colNumConfig.isRequired]?.innerText || "true";
+        const type = tdList[colNumConfig.type]?.innerText;
+        const schema = tdList[colNumConfig.schema]?.innerText;
+        const requiredChar = isRequired === "false" ? "?" : "";
+        const key = `${indent}${fieldName}${requiredChar}`;
         tsTypeStr += `${indent}/** ${annotation} */\n`;
         if (children.length > 0) {
             const childType = createTsTypeFromTrTree(children, colNumConfig, level + 1);
             if (type === "array") {
-                tsTypeStr += `${indent}${fieldName}: ${childType}[]\n`;
+                tsTypeStr += `${key}: ${childType}[]\n`;
             }
             else {
-                tsTypeStr += `${indent}${fieldName}: ${childType}\n`;
+                tsTypeStr += `${key}: ${childType}\n`;
             }
         }
         else {
             if (type === "array" && schema) {
                 const tsType = javaTypeToTsType(schema);
-                tsTypeStr += `${indent}${fieldName}: ${tsType}[]\n`;
+                tsTypeStr += `${key}: ${tsType}[]\n`;
             }
             else {
                 const tsType = javaTypeToTsType(type);
-                tsTypeStr += `${indent}${fieldName}: ${tsType}\n`;
+                tsTypeStr += `${key}: ${tsType}\n`;
             }
         }
     }
@@ -269,7 +274,7 @@ function getTrLevel(tr) {
 }
 // 将java的类型转为ts的基础类型
 function javaTypeToTsType(javaType) {
-    if (javaType === "string")
+    if (javaType.includes("string"))
         return "string";
     if (javaType.includes("integer"))
         return "number";
