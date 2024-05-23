@@ -428,10 +428,23 @@ function javaTypeToTsType(javaType) {
   if (javaType === "number") return "number";
   return "unknownType";
 }
+async function scrollSelectMenuIntoView() {
+  const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
+  if (menu) {
+    const selectItem = (
+      await waitElement(".ant-menu-item-selected", 10, 0.5)
+    )?.[0];
+    if (selectItem) {
+      setTimeout(() => {
+        selectItem.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 500);
+    }
+  }
+}
 (function () {
   "use strict";
-  // Your code here...
   if (window) {
     run();
+    scrollSelectMenuIntoView();
   }
 })();

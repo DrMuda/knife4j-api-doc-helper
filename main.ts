@@ -170,7 +170,7 @@ const waitTime = (time: number) => {
   });
 };
 
-async function run() {
+async function generateTsType() {
   const tabList = (
     await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
   )?.[0];
@@ -473,10 +473,25 @@ function javaTypeToTsType(javaType: string) {
   return "unknownType";
 }
 
+// 让选中的菜单项滚动到视图中间
+async function scrollSelectMenuIntoView() {
+  const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
+  if (menu) {
+    const selectItem = (
+      await waitElement(".ant-menu-item-selected", 10, 0.5)
+    )?.[0];
+    if (selectItem) {
+      setTimeout(() => {
+        selectItem.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 500);
+    }
+  }
+}
+
 (function () {
   "use strict";
-  // Your code here...
   if (window) {
-    run();
+    generateTsType();
+    scrollSelectMenuIntoView();
   }
 })();
