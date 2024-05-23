@@ -117,6 +117,20 @@ const tsTypeCssStr = `
   max-height: 500px;
   color: black;
 }`;
+/** 缩进空格数量 */
+const indentSpaces = 2;
+const themeColors = {
+  /** 关键字 蓝色 */
+  keyword: "#0000FF",
+  /** 类型名 蓝绿 */
+  typeName: "#267f99",
+  /** 注释 绿色 */
+  comment: "#008000",
+  /** 属性名 深蓝色 */
+  property: "#001080",
+  /** 原始TS类型 蓝色 */
+  primitiveType: "#0000FF",
+};
 
 /** 各字段位于哪列 */
 interface ColNumConfig {
@@ -272,7 +286,7 @@ async function setMyDom(parentDom: Element) {
       colNumConfig
     );
 
-    typeContent.innerHTML = `<span style="color: #0000FF">interface</span> <span style="color: #267f99">Data</span> ${tsTypeStrWithHighlight}`;
+    typeContent.innerHTML = `<span style="color: ${themeColors.keyword}">interface</span> <span style="color: ${themeColors.typeName}">Data</span> ${tsTypeStrWithHighlight}`;
     copyTypeBtn.onclick = () => {
       window.navigator.clipboard.writeText(`interface Data ${tsTypeStr}` || "");
       message.success(successMsg);
@@ -370,7 +384,7 @@ function createTsTypeFromTrTree(
   let tsTypeStr = "{\n";
   let tsTypeStrWithHighlight = "{\n";
   // 缩进
-  const indent = new Array(level * 2).fill(" ").join("");
+  const indent = new Array(level * indentSpaces).fill(" ").join("");
   for (const { ele, children = [] } of trTree) {
     const tdList = Array.from(ele.getElementsByTagName("td"));
     const fieldName = tdList[colNumConfig.fieldName]?.innerText;
@@ -381,28 +395,30 @@ function createTsTypeFromTrTree(
 
     const requiredChar = isRequired === "false" ? "?" : "";
     const key = `${indent}${fieldName}${requiredChar}`;
-    const highlightKey = `${indent}<span style="color: #001080" >${fieldName}</span>${requiredChar}`;
+    const highlightKey = `${indent}<span style="color: ${themeColors.property}" >${fieldName}</span>${requiredChar}`;
 
     tsTypeStr += `${indent}/** ${annotation} */\n`;
-    tsTypeStrWithHighlight += `${indent}<span style="color: #008000" >/** ${annotation} */</span>\n`;
+    tsTypeStrWithHighlight += `${indent}<span style="color: ${themeColors.comment}" >/** ${annotation} */</span>\n`;
     if (children.length > 0) {
       const child = createTsTypeFromTrTree(children, colNumConfig, level + 1);
+      tsTypeStr += `${key}: ${child.tsTypeStr}`;
+      tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}`;
       if (type === "array") {
-        tsTypeStr += `${key}: ${child.tsTypeStr}[]\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}[]\n`;
+        tsTypeStr += "[]\n";
+        tsTypeStrWithHighlight += "[]\n";
       } else {
-        tsTypeStr += `${key}: ${child.tsTypeStr}\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}\n`;
+        tsTypeStr += "\n";
+        tsTypeStrWithHighlight += "\n";
       }
     } else {
       if (type === "array" && schema) {
         const tsType = javaTypeToTsType(schema);
         tsTypeStr += `${key}: ${tsType}[]\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: #0000FF">${tsType}</span>[]\n`;
+        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: ${themeColors.primitiveType}">${tsType}</span>[]\n`;
       } else {
         const tsType = javaTypeToTsType(type);
         tsTypeStr += `${key}: ${tsType}\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: #0000FF">${tsType}</span>\n`;
+        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: ${themeColors.primitiveType}">${tsType}</span>\n`;
       }
     }
   }
