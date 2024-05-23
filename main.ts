@@ -67,11 +67,11 @@ function getMainElement() {
 const componentId = {
   tsTypeContain: "tsTypeContain",
   requestTypeContain: "requestTypeContain",
-  responeTypeContain: "responeTypeContain",
+  responseTypeContain: "responseTypeContain",
   copyRequestTypeBtn: "copyRequestTypeBtn",
-  copyResponeTypeBtn: "copyResponeTypeBtn",
+  copyResponseTypeBtn: "copyResponseTypeBtn",
   requestTypeContent: "requestTypeContent",
-  responeTypeContent: "responeTypeContent",
+  responseTypeContent: "responseTypeContent",
 };
 /** 缩进空格数量 */
 const indentSpaces = 2;
@@ -99,14 +99,14 @@ const tsTypeHtmlStr = `
       contenteditable
     ><code class="${componentId.requestTypeContent}"></code></pre>
   </div>
-  <div class="${componentId.responeTypeContain}">
-    <button class="${componentId.copyResponeTypeBtn} copy-type-btn">
+  <div class="${componentId.responseTypeContain}">
+    <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
       复制响应参数
     </button>
     <pre
       class="type-content"
       contenteditable
-    ><code class="${componentId.responeTypeContent}"></code></pre>
+    ><code class="${componentId.responseTypeContent}"></code></pre>
   </div>
 </div>`;
 const tsTypeCssStr = `
@@ -164,7 +164,7 @@ interface TrTreeNode {
   level: number;
 }
 
-const waitime = (time: number) => {
+const waitTime = (time: number) => {
   return new Promise((resolve) => {
     setTimeout(resolve, time);
   });
@@ -182,17 +182,17 @@ async function run() {
 
   const onTabListChange = debounce(async () => {
     // 找到当前显示的tab
-    const activeTabanelList = await waitElement(
+    const activeTabPanelList = await waitElement(
       ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
       10,
       0.5
     );
 
-    if (!activeTabanelList || activeTabanelList.length <= 0) {
+    if (!activeTabPanelList || activeTabPanelList.length <= 0) {
       message.error("没有找到激活中的tab");
       return;
     }
-    setMyDom(activeTabanelList[0]);
+    setMyDom(activeTabPanelList[0]);
   }, 200);
 
   // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
@@ -220,7 +220,7 @@ async function waitElement(
     if (targetElementList && targetElementList.length > 0) {
       return targetElementList;
     }
-    await waitime(1000 * frequency);
+    await waitTime(1000 * frequency);
   }
   return null;
 }
@@ -248,7 +248,7 @@ async function setMyDom(parentDom: Element) {
     return false;
   }
 
-  const titleContian = targetDom.parentElement;
+  const titleContain = targetDom.parentElement;
   const documentDom = targetDom.parentElement.parentElement;
   if (!documentDom) {
     message.error("没找到 document 容器");
@@ -262,27 +262,27 @@ async function setMyDom(parentDom: Element) {
   } else {
     const div = document.createElement("div");
     div.innerHTML = tsTypeHtmlStr;
-    documentDom.insertBefore(div, titleContian.nextSibling);
+    documentDom.insertBefore(div, titleContain.nextSibling);
   }
 
   const id = componentId;
   const copyRequestTypeBtn = parentDom.getElementsByClassName(
     id.copyRequestTypeBtn
   )?.[0];
-  const copyResponeTypeBtn = parentDom.getElementsByClassName(
-    id.copyResponeTypeBtn
+  const copyResponseTypeBtn = parentDom.getElementsByClassName(
+    id.copyResponseTypeBtn
   )?.[0];
   const requestTypeContent = parentDom.getElementsByClassName(
     id.requestTypeContent
   )?.[0];
-  const responeTypeContent = parentDom.getElementsByClassName(
-    id.responeTypeContent
+  const responseTypeContent = parentDom.getElementsByClassName(
+    id.responseTypeContent
   )?.[0];
   let requestTypeTable = getTableDom("request", documentDom);
-  let responeTypeTable = getTableDom("respone", documentDom);
+  let responseTypeTable = getTableDom("response", documentDom);
 
-  const setType = (type: "request" | "respone") => {
-    const table = type === "request" ? requestTypeTable : responeTypeTable;
+  const setType = (type: "request" | "response") => {
+    const table = type === "request" ? requestTypeTable : responseTypeTable;
     const colNumConfig =
       type === "request"
         ? {
@@ -300,9 +300,9 @@ async function setMyDom(parentDom: Element) {
             schema: 3,
           };
     const typeContent =
-      type === "request" ? requestTypeContent : responeTypeContent;
+      type === "request" ? requestTypeContent : responseTypeContent;
     const copyTypeBtn = (
-      type === "request" ? copyRequestTypeBtn : copyResponeTypeBtn
+      type === "request" ? copyRequestTypeBtn : copyResponseTypeBtn
     ) as HTMLButtonElement;
     const successMsg =
       type === "request" ? "复制请求参数成功" : "复制响应参数成功";
@@ -323,22 +323,22 @@ async function setMyDom(parentDom: Element) {
   };
 
   let prevRequestTypeTableInnerHtml = requestTypeTable.innerHTML;
-  let prevResponeTypeTableInnerHtml = responeTypeTable.innerHTML;
+  let prevResponseTypeTableInnerHtml = responseTypeTable.innerHTML;
   setType("request");
-  setType("respone");
-  // 有时候会因为网络或者其他问题， 表格数据没有加载完全， 获取到的类型全是 unkown， 在这里判断dom有无变化
+  setType("response");
+  // 有时候会因为网络或者其他问题， 表格数据没有加载完全， 获取到的类型全是 unknown， 在这里判断dom有无变化
   // 用MutationObserver监听不到， 不知为何
   for (let count = 0; count < 20; count++) {
-    await waitime(100);
+    await waitTime(100);
     let newRequestTypeTable = getTableDom("request", documentDom);
-    let newResponeTypeTable = getTableDom("respone", documentDom);
+    let newResponseTypeTable = getTableDom("response", documentDom);
     if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
       requestTypeTable = newRequestTypeTable;
       setType("request");
     }
-    if (newResponeTypeTable.innerHTML !== prevResponeTypeTableInnerHtml) {
-      responeTypeTable = newResponeTypeTable;
-      setType("respone");
+    if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
+      responseTypeTable = newResponseTypeTable;
+      setType("response");
     }
   }
 
@@ -346,13 +346,13 @@ async function setMyDom(parentDom: Element) {
 }
 
 // 获取请求参数或响应参数的 表格的dom
-function getTableDom(type: "request" | "respone", parentElement: Element) {
-  const targetInnertext = type === "request" ? "请求参数" : "响应参数";
+function getTableDom(type: "request" | "response", parentElement: Element) {
+  const targetInnerText = type === "request" ? "请求参数" : "响应参数";
   const titleDomList = Array.from(
     parentElement.getElementsByClassName("api-title")
   ) as HTMLDivElement[];
   const requestParamsTitleIndex = titleDomList.findIndex(
-    (dom) => dom.innerText === targetInnertext
+    (dom) => dom.innerText === targetInnerText
   );
   const targetTitleDom = titleDomList[requestParamsTitleIndex];
   const targetDomChildren = Array.from(targetTitleDom.parentElement!.children);

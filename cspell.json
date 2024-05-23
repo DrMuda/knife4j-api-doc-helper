@@ -1,0 +1,4 @@
+{
+  // 自定义正确的单词，通常是一些库名字和专有api,
+  "words": ["DrMuda", "autolog", "autologjs", "contenteditable"]
+}
