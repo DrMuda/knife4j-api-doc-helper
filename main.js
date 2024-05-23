@@ -71,24 +71,40 @@ const componentId = {
   requestTypeContent: "requestTypeContent",
   responeTypeContent: "responeTypeContent",
 };
+/** 缩进空格数量 */
+const indentSpaces = 2;
+const themeColors = {
+  /** 关键字 蓝色 */
+  keyword: "#0000FF",
+  /** 类型名 蓝绿 */
+  typeName: "#267f99",
+  /** 注释 绿色 */
+  comment: "#008000",
+  /** 属性名 红色 */
+  property: "#a60909",
+  /** 原始TS类型 蓝色 */
+  primitiveType: "#0000FF",
+};
 const tsTypeHtmlStr = `
 <div class="${componentId.tsTypeContain} ts-type-contain">
-<div class="${componentId.requestTypeContain}">
-  <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
-    复制请求参数
-  </button>
-  <pre
-    class="type-content"
-  ><code class="${componentId.requestTypeContent}"></code></pre>
-</div>
-<div class="${componentId.responeTypeContain}">
-  <button class="${componentId.copyResponeTypeBtn} copy-type-btn">
-    复制响应参数
-  </button>
-  <pre
-    class="type-content"
-  ><code class="${componentId.responeTypeContent}"></code></pre>
-</div>
+  <div class="${componentId.requestTypeContain}">
+    <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
+      复制请求参数
+    </button>
+    <pre
+      class="type-content"
+      contenteditable
+    ><code class="${componentId.requestTypeContent}"></code></pre>
+  </div>
+  <div class="${componentId.responeTypeContain}">
+    <button class="${componentId.copyResponeTypeBtn} copy-type-btn">
+      复制响应参数
+    </button>
+    <pre
+      class="type-content"
+      contenteditable
+    ><code class="${componentId.responeTypeContent}"></code></pre>
+  </div>
 </div>`;
 const tsTypeCssStr = `
 .ts-type-contain {
@@ -114,21 +130,23 @@ const tsTypeCssStr = `
   height: 100%;
   max-height: 500px;
   color: black;
+  outline: none;
+}
+.keyword {
+  color: ${themeColors.keyword};
+}
+.typeName {
+  color: ${themeColors.typeName};
+}
+.comment {
+  color: ${themeColors.comment};
+}
+.property {
+  color: ${themeColors.property};
+}
+.primitiveType {
+  color: ${themeColors.primitiveType};
 }`;
-/** 缩进空格数量 */
-const indentSpaces = 2;
-const themeColors = {
-  /** 关键字 蓝色 */
-  keyword: "#0000FF",
-  /** 类型名 蓝绿 */
-  typeName: "#267f99",
-  /** 注释 绿色 */
-  comment: "#008000",
-  /** 属性名 深蓝色 */
-  property: "#001080",
-  /** 原始TS类型 蓝色 */
-  primitiveType: "#0000FF",
-};
 const waitime = (time) => {
   return new Promise((resolve) => {
     setTimeout(resolve, time);
@@ -267,7 +285,7 @@ async function setMyDom(parentDom) {
       tree || [],
       colNumConfig
     );
-    typeContent.innerHTML = `<span style="color: ${themeColors.keyword}">interface</span> <span style="color: ${themeColors.typeName}">Data</span> ${tsTypeStrWithHighlight}`;
+    typeContent.innerHTML = `<span class="keyword">interface</span> <span class="typeName">Data</span> ${tsTypeStrWithHighlight}`;
     copyTypeBtn.onclick = () => {
       window.navigator.clipboard.writeText(`interface Data ${tsTypeStr}` || "");
       message.success(successMsg);
@@ -365,9 +383,9 @@ function createTsTypeFromTrTree(
     const schema = tdList[colNumConfig.schema]?.innerText;
     const requiredChar = isRequired === "false" ? "?" : "";
     const key = `${indent}${fieldName}${requiredChar}`;
-    const highlightKey = `${indent}<span style="color: ${themeColors.property}" >${fieldName}</span>${requiredChar}`;
+    const highlightKey = `${indent}<span class="property" >${fieldName}</span>${requiredChar}`;
     tsTypeStr += `${indent}/** ${annotation} */\n`;
-    tsTypeStrWithHighlight += `${indent}<span style="color: ${themeColors.comment}" >/** ${annotation} */</span>\n`;
+    tsTypeStrWithHighlight += `${indent}<span class="comment" >/** ${annotation} */</span>\n`;
     if (children.length > 0) {
       const child = createTsTypeFromTrTree(children, colNumConfig, level + 1);
       tsTypeStr += `${key}: ${child.tsTypeStr}`;
@@ -383,11 +401,11 @@ function createTsTypeFromTrTree(
       if (type === "array" && schema) {
         const tsType = javaTypeToTsType(schema);
         tsTypeStr += `${key}: ${tsType}[]\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: ${themeColors.primitiveType}">${tsType}</span>[]\n`;
+        tsTypeStrWithHighlight += `${highlightKey}: <span class="primitiveType">${tsType}</span>[]\n`;
       } else {
         const tsType = javaTypeToTsType(type);
         tsTypeStr += `${key}: ${tsType}\n`;
-        tsTypeStrWithHighlight += `${highlightKey}: <span style="color: ${themeColors.primitiveType}">${tsType}</span>\n`;
+        tsTypeStrWithHighlight += `${highlightKey}: <span class="primitiveType">${tsType}</span>\n`;
       }
     }
   }
