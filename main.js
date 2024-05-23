@@ -72,22 +72,22 @@ const componentId = {
   responeTypeContent: "responeTypeContent",
 };
 const tsTypeHtmlStr = `
-<div id="${componentId.tsTypeContain}" class="ts-type-contain">
-<div id="${componentId.requestTypeContain}">
-  <button id="${componentId.copyRequestTypeBtn}" class="copy-type-btn">
+<div class="${componentId.tsTypeContain} ts-type-contain">
+<div class="${componentId.requestTypeContain}">
+  <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
     复制请求参数
   </button>
   <pre
     class="type-content"
-  ><code id="${componentId.requestTypeContent}"></code></pre>
+  ><code class="${componentId.requestTypeContent}"></code></pre>
 </div>
-<div id="${componentId.responeTypeContain}">
-  <button id="${componentId.copyResponeTypeBtn}" class="copy-type-btn">
+<div class="${componentId.responeTypeContain}">
+  <button class="${componentId.copyResponeTypeBtn} copy-type-btn">
     复制响应参数
   </button>
   <pre
     class="type-content"
-  ><code id="${componentId.responeTypeContent}"></code></pre>
+  ><code class="${componentId.responeTypeContent}"></code></pre>
 </div>
 </div>`;
 const tsTypeCssStr = `
@@ -210,7 +210,9 @@ async function setMyDom(parentDom) {
     message.error("没找到 document 容器");
     return;
   }
-  const exitsTsTypeContain = document.getElementById(componentId.tsTypeContain);
+  const exitsTsTypeContain = parentDom.getElementsByClassName(
+    componentId.tsTypeContain
+  )?.[0];
   if (exitsTsTypeContain) {
     exitsTsTypeContain.parentElement.innerHTML = tsTypeHtmlStr;
   } else {
@@ -219,10 +221,18 @@ async function setMyDom(parentDom) {
     documentDom.insertBefore(div, titleContian.nextSibling);
   }
   const id = componentId;
-  const copyRequestTypeBtn = document.getElementById(id.copyRequestTypeBtn);
-  const copyResponeTypeBtn = document.getElementById(id.copyResponeTypeBtn);
-  const requestTypeContent = document.getElementById(id.requestTypeContent);
-  const responeTypeContent = document.getElementById(id.responeTypeContent);
+  const copyRequestTypeBtn = parentDom.getElementsByClassName(
+    id.copyRequestTypeBtn
+  )?.[0];
+  const copyResponeTypeBtn = parentDom.getElementsByClassName(
+    id.copyResponeTypeBtn
+  )?.[0];
+  const requestTypeContent = parentDom.getElementsByClassName(
+    id.requestTypeContent
+  )?.[0];
+  const responeTypeContent = parentDom.getElementsByClassName(
+    id.responeTypeContent
+  )?.[0];
   let requestTypeTable = getTableDom("request", documentDom);
   let responeTypeTable = getTableDom("respone", documentDom);
   const setType = (type) => {
