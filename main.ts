@@ -137,7 +137,7 @@ const tsTypeCssStr = `
   border-radius: 4px;
   padding: 4px;
   overflow: auto;
-  height: 100%;
+  height: calc(100% - 30px);
   max-height: 500px;
   color: black;
   outline: none;
