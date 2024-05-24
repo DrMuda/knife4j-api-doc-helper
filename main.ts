@@ -8,8 +8,15 @@
 // @match        https://*/doc.html
 // @match        http://*/*/doc.html
 // @match        https://*/*/doc.html
-// @grant        none
+// @resource css https://unpkg.com/layui@2.9.10/dist/css/layui.css
+// @grant    GM_getResourceURL
+// @grant    GM_getResourceText
+// @grant    GM_addStyle
+
 // ==/UserScript==
+
+// @ts-ignore
+GM_addStyle(GM_getResourceText("css"));
 
 // ======================= autologjs start ========================
 const cssStr = `#autolog{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;pointer-events:none;width:100vw;height:100vh;position:fixed;left:0;top:0;z-index:9999999;cursor:pointer;transition:0.2s}#autolog span{pointer-events:auto;width:max-content;animation:fadein 0.4s;animation-delay:0s;border-radius:6px;padding:10px 20px;box-shadow:0 0 10px 6px rgba(0,0,0,0.1);margin:4px;transition:0.2s;z-index:9999999;font-size:14px;display:flex;align-items:center;justify-content:center;gap:4px;height:max-content}#autolog span.hide{opacity:0;pointer-events:none;transform:translateY(-10px);height:0;padding:0;margin:0}.autolog-warn{background-color:#fffaec;color:#e29505}.autolog-error{background-color:#fde7e7;color:#d93025}.autolog-info{background-color:#e6f7ff;color:#0e6eb8}.autolog-success{background-color:#e9f7e7;color:#1a9e2c}.autolog-{background-color:#fafafa;color:#333}@keyframes fadein{0%{opacity:0;transform:translateY(-10px)}100%{opacity:1;transform:translateY(0)}}`;
@@ -135,6 +142,18 @@ const tsTypeCssStr = `
   color: black;
   outline: none;
 }
+.method {
+  padding: 4px;
+  border-radius: 4px;
+  color: white;
+  background-color: #858585;
+}
+.method-get {
+  background-color: #52a7f9;
+}
+.method-post {
+  background-color: #46c588;
+}
 .keyword {
   color: ${themeColors.keyword};
 }
@@ -150,6 +169,7 @@ const tsTypeCssStr = `
 .primitiveType {
   color: ${themeColors.primitiveType};
 }`;
+
 /** 各字段位于哪列 */
 interface ColNumConfig {
   fieldName: number;
@@ -164,12 +184,59 @@ interface TrTreeNode {
   level: number;
 }
 
+/** 引用的类型 */
+interface TypeRef {
+  originalRef: string;
+  $ref: string;
+}
+/** ApiDoc接口返回的数据 */
+interface ApiDoc {
+  paths: {
+    [path: string]: {
+      [method: string]: {
+        tags: string[];
+        summary: string;
+        operationId: string;
+        produces: string[];
+        parameters: {
+          name: string;
+          in: string;
+          description: string;
+          required: boolean;
+          type: string;
+          format: string;
+          schema: TypeRef | string;
+        }[];
+        responses: { 200: { schema: { type: string } | TypeRef } };
+        responsesObject: { 200: { schema: { type: string } | TypeRef } };
+        deprecated: boolean;
+      };
+    };
+  };
+  definitions: {
+    [DTO: string]: {
+      type: string;
+      properties: {
+        [fieldName: string]:
+          | {
+              type: string;
+              format: string;
+              items: { type: string } | TypeRef;
+              description: string;
+            }
+          | TypeRef;
+      };
+    };
+  };
+}
+
 const waitTime = (time: number) => {
   return new Promise((resolve) => {
     setTimeout(resolve, time);
   });
 };
 
+/** 生成ts类型 */
 async function generateTsType() {
   const tabList = (
     await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
@@ -201,7 +268,7 @@ async function generateTsType() {
   observer.observe(tabList, config);
 }
 
-// 等待元素加载完成并返回， 没有则返回null
+/** 等待元素加载完成并返回， 没有则返回null */
 async function waitElement(
   selector: string,
   /** 超时时间 X秒 */
@@ -225,7 +292,7 @@ async function waitElement(
   return null;
 }
 
-// 防抖函数
+/** 创建一个防抖函数 */
 function debounce<T>(callback: (...args: T[]) => void, wait: number) {
   let timer = null;
   return (...args: T[]) => {
@@ -237,7 +304,7 @@ function debounce<T>(callback: (...args: T[]) => void, wait: number) {
   };
 }
 
-// 设置复制按钮、文本框 等等dom
+/** 设置复制按钮、文本框 等等dom */
 async function setMyDom(parentDom: Element) {
   // 获取新增Dom的指定位置
   const targetDom = (
@@ -345,7 +412,7 @@ async function setMyDom(parentDom: Element) {
   return true;
 }
 
-// 获取请求参数或响应参数的 表格的dom
+/** 获取请求参数或响应参数的 表格的dom */
 function getTableDom(type: "request" | "response", parentElement: Element) {
   const targetInnerText = type === "request" ? "请求参数" : "响应参数";
   const titleDomList = Array.from(
@@ -366,7 +433,7 @@ function getTableDom(type: "request" | "response", parentElement: Element) {
   return table;
 }
 
-// 将嵌套表格转成树形结构
+/** 将嵌套表格转成树形结构 */
 function createTrTree(trList: HTMLTableRowElement[]) {
   // 初始化栈
   const stack: TrTreeNode[] = [];
@@ -403,7 +470,7 @@ function createTrTree(trList: HTMLTableRowElement[]) {
   return tree;
 }
 
-// 从树形tr创建tsType字符串
+/** 从树形tr创建tsType字符串 */
 function createTsTypeFromTrTree(
   trTree: TrTreeNode[],
   /** 各数据在哪一列 */
@@ -412,7 +479,7 @@ function createTsTypeFromTrTree(
 ) {
   let tsTypeStr = "{\n";
   let tsTypeStrWithHighlight = "{\n";
-  // 缩进
+  /** 缩进 */
   const indent = new Array(level * indentSpaces).fill(" ").join("");
   for (const { ele, children = [] } of trTree) {
     const tdList = Array.from(ele.getElementsByTagName("td"));
@@ -456,14 +523,14 @@ function createTsTypeFromTrTree(
   return { tsTypeStr, tsTypeStrWithHighlight };
 }
 
-// 获取表格行的嵌套级别
+/** 获取表格行的嵌套级别 */
 function getTrLevel(tr: HTMLTableRowElement) {
   const levelMatch = tr.className.match(/ant-table-row-level-\d/);
   const level = Number(levelMatch[0].replace("ant-table-row-level-", ""));
   return level;
 }
 
-// 将java的类型转为ts的基础类型
+/** 将java的类型转为ts的基础类型 */
 function javaTypeToTsType(javaType: string) {
   if (javaType.includes("string")) return "string";
   if (javaType.includes("integer")) return "number";
@@ -473,25 +540,139 @@ function javaTypeToTsType(javaType: string) {
   return "unknownType";
 }
 
-// 让选中的菜单项滚动到视图中间
+/** 让选中的菜单项滚动到视图中间 */
 async function scrollSelectMenuIntoView() {
   const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
-  if (menu) {
-    const selectItem = (
-      await waitElement(".ant-menu-item-selected", 10, 0.5)
-    )?.[0];
-    if (selectItem) {
-      setTimeout(() => {
-        selectItem.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 500);
-    }
+  if (!menu) return;
+
+  const selectItem = (
+    await waitElement(".ant-menu-item-selected", 10, 0.5)
+  )?.[0];
+  if (selectItem) {
+    setTimeout(() => {
+      selectItem.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 500);
   }
+}
+
+/** 生成菜单搜索栏 */
+async function generateMenuSearchBar(apiDocs: ApiDoc) {
+  const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
+  if (!menu) return;
+
+  const form = document.createElement("div");
+  form.className = "layui-form layui-row layui-col-space16";
+  const select = document.createElement("select");
+  select.setAttribute("lay-search", "");
+  select.setAttribute("lay-filter", "handleSelect");
+  form.appendChild(select);
+  const paths = apiDocs.paths;
+  const option = document.createElement("option");
+  option.innerText = "请搜索";
+  option.value = "请搜索";
+  select.appendChild(option);
+  Object.entries(paths).forEach(([path, methods]) => {
+    Object.entries(methods).forEach(
+      ([method, { tags, summary, deprecated }]) => {
+        const option = document.createElement("option");
+        let innerHTML = `<span class="method method-${method}">${method.toUpperCase()}</span> ${tags.join(
+          " / "
+        )} / ${summary}`;
+        if (deprecated === true) {
+          innerHTML = `<del>${innerHTML}</del>`;
+        }
+        option.innerHTML = innerHTML;
+        option.value = [...tags, summary]
+          .map((item) => encodeURIComponent(item))
+          .join("/");
+        select.appendChild(option);
+      }
+    );
+  });
+  menu.parentElement.insertBefore(form, menu);
+  menu.setAttribute("style", "height: calc(100vh - 64px - 54px);");
+  form.setAttribute("style", "margin: -15px -3px 0 8px");
+
+  const script = document.createElement("script");
+  script.src = "//unpkg.com/layui@2.9.10/dist/layui.js";
+  script.onload = () => {
+    // @ts-ignore
+    layui.use(function () {
+      // @ts-ignore
+      const form = layui.form;
+      // 监听 select 事件， 选中后找相应的一个菜单项进行 模拟点击
+      form.on("select(handleSelect)", async function (data) {
+        const value = data.value as string; // 获得被选中的值
+        const paths = value.split("/").map((item) => decodeURIComponent(item));
+        let parentDom = menu;
+        for (const path of paths) {
+          const liList = Array.from(
+            parentDom.querySelectorAll(`ul>li`)
+          ) as HTMLSpanElement[];
+          const li = liList.find((li) => li.innerText.includes(path));
+          if (!li) break;
+          li?.getElementsByTagName("span")?.[0].click();
+          await waitTime(100);
+          parentDom = li;
+        }
+        scrollSelectMenuIntoView();
+      });
+    });
+    // layui中如果 options 的内容不是纯文本， 会额外多出一些无效选项， 移除这个无效选项
+    setTimeout(() => {
+      Array.from(form.querySelectorAll(".layui-anim dd") || []).forEach(
+        (dd) => {
+          const span = dd.getElementsByTagName("span")?.[0];
+          if (span) return;
+          dd.remove();
+        }
+      );
+    }, 100);
+  };
+  document.body.appendChild(script);
+}
+
+/** 拦截文档接口的数据 */
+function interceptApiDocs(): Promise<ApiDoc> {
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const originalSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this._url = url;
+    return originalOpen.apply(this, arguments);
+  };
+  return new Promise((resolve, reject) => {
+    XMLHttpRequest.prototype.send = function () {
+      this.addEventListener("load", function () {
+        if (this._url.includes("v2/api-docs")) {
+          // 拦截到的响应数据
+          const response = this.responseText;
+          try {
+            resolve(JSON.parse(response));
+          } catch (error) {
+            reject();
+            console.error(error);
+          }
+        }
+      });
+      return originalSend.apply(this, arguments);
+    };
+    setTimeout(reject, 30 * 1000);
+  });
 }
 
 (function () {
   "use strict";
   if (window) {
-    generateTsType();
-    scrollSelectMenuIntoView();
+    interceptApiDocs().then(
+      (apiDocs) => {
+        generateTsType();
+        scrollSelectMenuIntoView();
+        generateMenuSearchBar(apiDocs);
+      },
+      () => {
+        message.error("拦截接口数据失败");
+      }
+    );
   }
 })();
