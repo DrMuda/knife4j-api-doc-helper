@@ -128,6 +128,7 @@ const tsTypeCssStr = `
   cursor: pointer;
 }
 .type-content {
+  font-size: 12px;
   border: 1px solid #dfdfdf;
   border-radius: 4px;
   padding: 4px;
@@ -142,6 +143,7 @@ const tsTypeCssStr = `
   border-radius: 4px;
   color: white;
   background-color: #858585;
+  font-weight: bold;
 }
 .method-get {
   background-color: #52a7f9;
