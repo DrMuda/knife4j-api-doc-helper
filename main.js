@@ -172,31 +172,11 @@ const waitTime = (time) => {
   });
 };
 /** 生成ts类型 */
-async function generateTsType() {
-  const tabList = (
-    await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
-  )?.[0];
-  if (!tabList) return;
+async function generateTsType(activeTabPanel) {
   const style = document.createElement("style");
   style.innerHTML = tsTypeCssStr;
   document.body.appendChild(style);
-  const onTabListChange = debounce(async () => {
-    // 找到当前显示的tab
-    const activeTabPanelList = await waitElement(
-      ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
-      10,
-      0.5
-    );
-    if (!activeTabPanelList || activeTabPanelList.length <= 0) {
-      message.error("没有找到激活中的tab");
-      return;
-    }
-    setMyDom(activeTabPanelList[0]);
-  }, 200);
-  // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
-  const observer = new MutationObserver(onTabListChange);
-  const config = { childList: true, subtree: true };
-  observer.observe(tabList, config);
+  setMyDom(activeTabPanel);
 }
 /** 等待元素加载完成并返回， 没有则返回null */
 async function waitElement(
@@ -561,8 +541,13 @@ function interceptApiDocs() {
   });
 }
 /** 替换原本的接口路径 */
-async function replacePath() {
-  const pathEl = await waitElement(".knife4j-api-summary-path", 10, 0.5);
+async function replacePath(activeTabPanel) {
+  const pathEl = await waitElement(
+    ".knife4j-api-summary-path",
+    10,
+    0.5,
+    activeTabPanel
+  );
   if (!pathEl[0]) return;
   let path = pathEl[0].innerText;
   path = path.replace("/e-commerce-api/", "/api/");
@@ -576,11 +561,31 @@ async function replacePath() {
   "use strict";
   if (window) {
     interceptApiDocs().then(
-      (apiDocs) => {
-        generateTsType();
+      async (apiDocs) => {
+        const tabList = (
+          await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
+        )?.[0];
+        if (!tabList) return;
         scrollSelectMenuIntoView();
         generateMenuSearchBar(apiDocs);
-        replacePath();
+        const onTabListChange = async () => {
+          // 找到当前显示的tab
+          const activeTabPanelList = await waitElement(
+            ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
+            10,
+            0.5
+          );
+          if (!activeTabPanelList || activeTabPanelList.length <= 0) {
+            message.error("没有找到激活中的tab");
+            return;
+          }
+          generateTsType(activeTabPanelList[0]);
+          replacePath(activeTabPanelList[0]);
+        };
+        // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
+        const observer = new MutationObserver(onTabListChange);
+        const config = { childList: true, subtree: true };
+        observer.observe(tabList, config);
       },
       () => {
         message.error("拦截接口数据失败");
