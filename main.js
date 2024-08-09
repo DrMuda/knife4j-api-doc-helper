@@ -15,7 +15,7 @@
 // ==/UserScript==
 // @ts-ignore
 GM_addStyle(GM_getResourceText("css"));
-// ======================= autologjs start ========================
+// #region autologjs
 const cssStr = `#autolog{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;pointer-events:none;width:100vw;height:100vh;position:fixed;left:0;top:0;z-index:9999999;cursor:pointer;transition:0.2s}#autolog span{pointer-events:auto;width:max-content;animation:fadein 0.4s;animation-delay:0s;border-radius:6px;padding:10px 20px;box-shadow:0 0 10px 6px rgba(0,0,0,0.1);margin:4px;transition:0.2s;z-index:9999999;font-size:14px;display:flex;align-items:center;justify-content:center;gap:4px;height:max-content}#autolog span.hide{opacity:0;pointer-events:none;transform:translateY(-10px);height:0;padding:0;margin:0}.autolog-warn{background-color:#fffaec;color:#e29505}.autolog-error{background-color:#fde7e7;color:#d93025}.autolog-info{background-color:#e6f7ff;color:#0e6eb8}.autolog-success{background-color:#e9f7e7;color:#1a9e2c}.autolog-{background-color:#fafafa;color:#333}@keyframes fadein{0%{opacity:0;transform:translateY(-10px)}100%{opacity:1;transform:translateY(0)}}`;
 const svgIcons = {
   warn: `<svg t="1713405237257" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2387" xmlns:xlink="http://www.w3.org/1999/xlink" width="16" height="16"><path d="M934.4 770.133333L605.866667 181.333333C586.666667 147.2 550.4 128 512 128c-38.4 0-74.666667 21.333333-93.866667 53.333333L89.6 770.133333c-19.2 34.133333-19.2 76.8 0 110.933334S145.066667 938.666667 183.466667 938.666667h657.066666c38.4 0 74.666667-21.333333 93.866667-57.6 19.2-34.133333 19.2-76.8 0-110.933334z m-55.466667 81.066667c-8.533333 14.933333-23.466667 23.466667-38.4 23.466667H183.466667c-14.933333 0-29.866667-8.533333-38.4-23.466667-8.533333-14.933333-8.533333-34.133333 0-49.066667L473.6 213.333333c8.533333-12.8 23.466667-21.333333 38.4-21.333333s29.866667 8.533333 38.4 21.333333l328.533333 588.8c8.533333 14.933333 8.533333 32 0 49.066667z" fill="#e29505" p-id="2388"></path><path d="M512 746.666667m-42.666667 0a42.666667 42.666667 0 1 0 85.333334 0 42.666667 42.666667 0 1 0-85.333334 0Z" fill="#e29505" p-id="2389"></path><path d="M512 629.333333c17.066667 0 32-14.933333 32-32v-192c0-17.066667-14.933333-32-32-32s-32 14.933333-32 32v192c0 17.066667 14.933333 32 32 32z" fill="#e29505" p-id="2390"></path></svg>`,
@@ -66,7 +66,7 @@ function getMainElement() {
   }
   return mainEl;
 }
-// ======================= autologjs end ========================
+// #endregion
 const componentId = {
   tsTypeContain: "tsTypeContain",
   requestTypeContain: "requestTypeContain",
@@ -560,6 +560,18 @@ function interceptApiDocs() {
     setTimeout(reject, 30 * 1000);
   });
 }
+/** 替换原本的接口路径 */
+async function replacePath() {
+  const pathEl = await waitElement(".knife4j-api-summary-path", 10, 0.5);
+  if (!pathEl[0]) return;
+  let path = pathEl[0].innerText;
+  path = path.replace("/e-commerce-api/", "/api/");
+  pathEl[0].innerText = path;
+  pathEl[0].onclick = () => {
+    navigator.clipboard.writeText(path);
+    message.success("已复制");
+  };
+}
 (function () {
   "use strict";
   if (window) {
@@ -568,6 +580,7 @@ function interceptApiDocs() {
         generateTsType();
         scrollSelectMenuIntoView();
         generateMenuSearchBar(apiDocs);
+        replacePath();
       },
       () => {
         message.error("拦截接口数据失败");
