@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档生成参数TS类型
 // @namespace    http://tampermonkey.net/
-// @version      2024-05-21
+// @version      2024-08-13
 // @description  try to take over the world!
 // @author       DrMuda
 // @match        http://*/doc.html
@@ -93,11 +93,9 @@ const themeColors = {
   primitiveType: "#0000FF",
 };
 const storageKey = {
-  pendingOpenPath: "pendingOpenPath",
-  mainPageHeartbeat: "mainPageHeartbeat",
   currentPageOpenApiTabMap: "currentPageOpenApiTabMap",
-  pingMsg: "pingMsg",
-  minKey: "minKey",
+  requestSyncPageKey: "requestSyncPageKey",
+  responseSync: "responseSync",
 };
 const heartbeatTimeout = 1500;
 // #endregion
@@ -579,16 +577,10 @@ async function replacePath(activeTabPanel) {
 class OtherPagePathSynchronizer {
   static instance;
   key;
-  isMainPage = false;
-  checkMainPageStatusInterval = null;
   constructor() {
-    this.startCheckMainPageStatus = this.startCheckMainPageStatus.bind(this);
-    this.stopCheckMainPageStatus = this.stopCheckMainPageStatus.bind(this);
-    this.checkMainPageStatus = this.checkMainPageStatus.bind(this);
-    this.startChooseNewMainPage = this.startChooseNewMainPage.bind(this);
-    this.startMainPageHeartbeat = this.startMainPageHeartbeat.bind(this);
-    this.updatePendingOpenPath = this.updatePendingOpenPath.bind(this);
-    this.openPath = this.openPath.bind(this);
+    this.mount = this.mount.bind(this);
+    this.syncOtherPage = this.syncOtherPage.bind(this);
+    this.responseSync = this.responseSync.bind(this);
     this.key = Date.now();
     const key = sessionStorage.getItem("key");
     if (key) {
@@ -597,8 +589,9 @@ class OtherPagePathSynchronizer {
       this.key = Date.now();
       sessionStorage.setItem("key", this.key.toString());
     }
-    this.startCheckMainPageStatus();
-    setInterval(this.openPath, 1000);
+    window.addEventListener("storage", () => {
+      this.responseSync();
+    });
   }
   static getInstance() {
     if (OtherPagePathSynchronizer.instance) {
@@ -607,110 +600,53 @@ class OtherPagePathSynchronizer {
     OtherPagePathSynchronizer.instance = new OtherPagePathSynchronizer();
     return OtherPagePathSynchronizer.instance;
   }
-  startCheckMainPageStatus() {
-    this.checkMainPageStatusInterval = setInterval(() => {
-      this.checkMainPageStatus();
-    }, heartbeatTimeout);
-  }
-  stopCheckMainPageStatus() {
-    this.checkMainPageStatusInterval &&
-      clearInterval(this.checkMainPageStatusInterval);
-  }
-  /** 检测当前的主页面(最早打开的页面)是否被关闭了或者不存在 */
-  checkMainPageStatus() {
-    if (this.isMainPage) return;
-    const mainPageHeartbeatStr =
-      localStorage.getItem(storageKey.mainPageHeartbeat) || "NaN-NaN";
-    const [mainPageKey, mainPageHeartbeat] = mainPageHeartbeatStr
-      .split("-")
-      .map((item) => Number(item));
-    if (Number.isNaN(mainPageHeartbeat)) {
-      this.startMainPageHeartbeat();
-      return;
-    }
-    if (mainPageKey === this.key) {
-      this.startMainPageHeartbeat();
-      return;
-    }
-    // 如果主页面心跳停止， 则寻找其他页面作为主页面
-    if (Date.now() - mainPageHeartbeat > heartbeatTimeout) {
-      this.startChooseNewMainPage();
-    }
-  }
-  /** 开始抉择新的主页面 */
-  async startChooseNewMainPage() {
-    this.stopCheckMainPageStatus();
-    const startTime = Date.now();
-    const timeout = 5000;
-    while (true) {
-      const minKey = Number(
-        localStorage.getItem(storageKey.minKey) ||
-          Number.MAX_SAFE_INTEGER.toString()
-      );
-      localStorage.setItem(
-        storageKey.minKey,
-        Math.min(this.key, minKey).toString()
-      );
-      await waitTime(100);
-      if (Date.now() - startTime > timeout) break;
-    }
-    const minKey = Number(
-      localStorage.getItem(storageKey.minKey) || Date.now().toString()
-    );
-    if (minKey === this.key) {
-      this.isMainPage = true;
-      this.startMainPageHeartbeat();
-      localStorage.setItem(storageKey.minKey, "0");
-    } else {
-      setTimeout(this.startCheckMainPageStatus, heartbeatTimeout * 2);
-    }
-    setTimeout(() => {
-      localStorage.removeItem(storageKey.minKey);
-    }, 5000);
-  }
-  startMainPageHeartbeat() {
-    this.isMainPage = true;
-    const mainPageMark = document.createElement("span");
-    mainPageMark.setAttribute(
+  mount() {
+    const syncButton = document.createElement("span");
+    syncButton.setAttribute(
       "style",
-      "padding: 0 2px; background-color: #ff000055; border-radius: 4px; border: 1px solid #ff0000;"
+      "border:0; color: white; background: #1890ff; border-radius: 4px; cursor: pointer;padding: 2px 4px;"
     );
-    mainPageMark.innerText = "主页面";
-    document.querySelectorAll(".header")?.[0]?.appendChild(mainPageMark);
-    const titleEl = document.querySelector("head title");
-    titleEl.innerText = `[主]${titleEl.innerText}`;
-    setInterval(() => {
-      localStorage.setItem(
-        storageKey.mainPageHeartbeat,
-        `${this.key}-${Date.now().toString()}`
-      );
-    }, 1000);
+    syncButton.innerText = "同步其他页面";
+    syncButton.onclick = this.syncOtherPage;
+    document.querySelectorAll(".header")?.[0]?.appendChild(syncButton);
   }
-  /** 更新待打开的接口路径 */
-  async updatePendingOpenPath() {
-    try {
-      while (true) {
-        await waitTime(50);
-        const pendingOpenPath = localStorage.getItem(
-          storageKey.pendingOpenPath
-        );
-        if (pendingOpenPath) continue;
-        localStorage.setItem(storageKey.pendingOpenPath, location.href);
-        break;
+  async syncOtherPage() {
+    localStorage.setItem(storageKey.requestSyncPageKey, this.key.toString());
+    await waitTime(1000);
+    localStorage.removeItem(storageKey.requestSyncPageKey);
+    const length = localStorage.length;
+    const pathList = [];
+    for (let i = 0; i < length; i++) {
+      const key = localStorage.key(i);
+      if (key.includes(storageKey.responseSync)) {
+        const value = JSON.parse(localStorage.getItem(key));
+        pathList.push(...value);
+        setTimeout(() => {
+          localStorage.removeItem(key);
+        }, 100);
       }
-    } catch (error) {}
+    }
+    for (const path of pathList) {
+      const currentPageOpenApiTabMap = JSON.parse(
+        sessionStorage.getItem(storageKey.currentPageOpenApiTabMap)
+      );
+      if (Object.values(currentPageOpenApiTabMap).includes(path)) continue;
+      location.href = path;
+      await waitTime(500);
+    }
+    scrollSelectMenuIntoView();
   }
-  openPath() {
-    if (!this.isMainPage) return;
-    const pendingOpenPath = localStorage.getItem(storageKey.pendingOpenPath);
-    localStorage.removeItem(storageKey.pendingOpenPath);
-    if (!pendingOpenPath) return;
+  responseSync() {
+    const key = localStorage.getItem(storageKey.requestSyncPageKey);
+    if (!key) return;
+    if (key === this.key.toString()) return;
     const currentPageOpenApiTabMap = JSON.parse(
       sessionStorage.getItem(storageKey.currentPageOpenApiTabMap)
     );
-    if (Object.values(currentPageOpenApiTabMap).includes(pendingOpenPath))
-      return;
-    location.href = pendingOpenPath;
+    localStorage.setItem(
+      `${storageKey.responseSync}-${this.key}`,
+      JSON.stringify(Object.values(currentPageOpenApiTabMap))
+    );
   }
 }
 (function () {
@@ -718,6 +654,7 @@ class OtherPagePathSynchronizer {
   if (window) {
     interceptApiDocs().then(
       async (apiDocs) => {
+        OtherPagePathSynchronizer.getInstance().mount();
         const tabList = (
           await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
         )?.[0];
@@ -737,9 +674,6 @@ class OtherPagePathSynchronizer {
           }
           generateTsType(activeTabPanelList[0]);
           replacePath(activeTabPanelList[0]);
-          const otherPagePathSynchronizer =
-            OtherPagePathSynchronizer.getInstance();
-          otherPagePathSynchronizer.updatePendingOpenPath();
           const tabList = document.querySelectorAll(
             ".ant-tabs-top-bar .ant-tabs-tab"
           );
