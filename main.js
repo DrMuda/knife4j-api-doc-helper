@@ -67,6 +67,8 @@ function getMainElement() {
   return mainEl;
 }
 // #endregion
+// #region 常量
+/** 元素组件的id */
 const componentId = {
   tsTypeContain: "tsTypeContain",
   requestTypeContain: "requestTypeContain",
@@ -90,6 +92,16 @@ const themeColors = {
   /** 原始TS类型 蓝色 */
   primitiveType: "#0000FF",
 };
+const storageKey = {
+  pendingOpenPath: "pendingOpenPath",
+  mainPageHeartbeat: "mainPageHeartbeat",
+  currentPageOpenApiTabMap: "currentPageOpenApiTabMap",
+  pingMsg: "pingMsg",
+  minKey: "minKey",
+};
+const heartbeatTimeout = 1500;
+// #endregion
+// #region html模板与样式
 const tsTypeHtmlStr = `
 <div class="${componentId.tsTypeContain} ts-type-contain">
   <div class="${componentId.requestTypeContain}">
@@ -159,6 +171,7 @@ const tsTypeCssStr = `
 }
 .comment {
   color: ${themeColors.comment};
+  overflow-wrap: anywhere;
 }
 .property {
   color: ${themeColors.property};
@@ -557,6 +570,149 @@ async function replacePath(activeTabPanel) {
     message.success("已复制");
   };
 }
+/** 跨页面通信同步打开的接口tab
+ *
+ * 主页面： 最早打开的页面， 如果主页面被关闭， 由其他页面根据各自的打开时间决定出新的主页面
+ *
+ *
+ */
+class OtherPagePathSynchronizer {
+  static instance;
+  key;
+  isMainPage = false;
+  checkMainPageStatusInterval = null;
+  constructor() {
+    this.startCheckMainPageStatus = this.startCheckMainPageStatus.bind(this);
+    this.stopCheckMainPageStatus = this.stopCheckMainPageStatus.bind(this);
+    this.checkMainPageStatus = this.checkMainPageStatus.bind(this);
+    this.startChooseNewMainPage = this.startChooseNewMainPage.bind(this);
+    this.startMainPageHeartbeat = this.startMainPageHeartbeat.bind(this);
+    this.updatePendingOpenPath = this.updatePendingOpenPath.bind(this);
+    this.openPath = this.openPath.bind(this);
+    this.key = Date.now();
+    const key = sessionStorage.getItem("key");
+    if (key) {
+      this.key = Number(key);
+    } else {
+      this.key = Date.now();
+      sessionStorage.setItem("key", this.key.toString());
+    }
+    this.startCheckMainPageStatus();
+    setInterval(this.openPath, 1000);
+  }
+  static getInstance() {
+    if (OtherPagePathSynchronizer.instance) {
+      return OtherPagePathSynchronizer.instance;
+    }
+    OtherPagePathSynchronizer.instance = new OtherPagePathSynchronizer();
+    return OtherPagePathSynchronizer.instance;
+  }
+  startCheckMainPageStatus() {
+    this.checkMainPageStatusInterval = setInterval(() => {
+      this.checkMainPageStatus();
+    }, heartbeatTimeout);
+  }
+  stopCheckMainPageStatus() {
+    this.checkMainPageStatusInterval &&
+      clearInterval(this.checkMainPageStatusInterval);
+  }
+  /** 检测当前的主页面(最早打开的页面)是否被关闭了或者不存在 */
+  checkMainPageStatus() {
+    if (this.isMainPage) return;
+    const mainPageHeartbeatStr =
+      localStorage.getItem(storageKey.mainPageHeartbeat) || "NaN-NaN";
+    const [mainPageKey, mainPageHeartbeat] = mainPageHeartbeatStr
+      .split("-")
+      .map((item) => Number(item));
+    if (Number.isNaN(mainPageHeartbeat)) {
+      this.startMainPageHeartbeat();
+      return;
+    }
+    if (mainPageKey === this.key) {
+      this.startMainPageHeartbeat();
+      return;
+    }
+    // 如果主页面心跳停止， 则寻找其他页面作为主页面
+    if (Date.now() - mainPageHeartbeat > heartbeatTimeout) {
+      this.startChooseNewMainPage();
+    }
+  }
+  /** 开始抉择新的主页面 */
+  async startChooseNewMainPage() {
+    this.stopCheckMainPageStatus();
+    const startTime = Date.now();
+    const timeout = 5000;
+    while (true) {
+      const minKey = Number(
+        localStorage.getItem(storageKey.minKey) ||
+          Number.MAX_SAFE_INTEGER.toString()
+      );
+      localStorage.setItem(
+        storageKey.minKey,
+        Math.min(this.key, minKey).toString()
+      );
+      await waitTime(100);
+      if (Date.now() - startTime > timeout) break;
+    }
+    const minKey = Number(
+      localStorage.getItem(storageKey.minKey) || Date.now().toString()
+    );
+    if (minKey === this.key) {
+      this.isMainPage = true;
+      this.startMainPageHeartbeat();
+      localStorage.setItem(storageKey.minKey, "0");
+    } else {
+      setTimeout(this.startCheckMainPageStatus, heartbeatTimeout * 2);
+    }
+    setTimeout(() => {
+      localStorage.removeItem(storageKey.minKey);
+    }, 5000);
+  }
+  startMainPageHeartbeat() {
+    this.isMainPage = true;
+    const mainPageMark = document.createElement("span");
+    mainPageMark.setAttribute(
+      "style",
+      "padding: 0 2px; background-color: #ff000055; border-radius: 4px; border: 1px solid #ff0000;"
+    );
+    mainPageMark.innerText = "主页面";
+    document.querySelectorAll(".header")?.[0]?.appendChild(mainPageMark);
+    const titleEl = document.querySelector("head title");
+    titleEl.innerText = `[主]${titleEl.innerText}`;
+    setInterval(() => {
+      localStorage.setItem(
+        storageKey.mainPageHeartbeat,
+        `${this.key}-${Date.now().toString()}`
+      );
+    }, 1000);
+  }
+  /** 更新待打开的接口路径 */
+  async updatePendingOpenPath() {
+    try {
+      while (true) {
+        await waitTime(50);
+        const pendingOpenPath = localStorage.getItem(
+          storageKey.pendingOpenPath
+        );
+        if (pendingOpenPath) continue;
+        localStorage.setItem(storageKey.pendingOpenPath, location.href);
+        break;
+      }
+    } catch (error) {}
+  }
+  openPath() {
+    if (!this.isMainPage) return;
+    const pendingOpenPath = localStorage.getItem(storageKey.pendingOpenPath);
+    localStorage.removeItem(storageKey.pendingOpenPath);
+    if (!pendingOpenPath) return;
+    const currentPageOpenApiTabMap = JSON.parse(
+      sessionStorage.getItem(storageKey.currentPageOpenApiTabMap)
+    );
+    if (Object.values(currentPageOpenApiTabMap).includes(pendingOpenPath))
+      return;
+    location.href = pendingOpenPath;
+  }
+}
 (function () {
   "use strict";
   if (window) {
@@ -581,6 +737,39 @@ async function replacePath(activeTabPanel) {
           }
           generateTsType(activeTabPanelList[0]);
           replacePath(activeTabPanelList[0]);
+          const otherPagePathSynchronizer =
+            OtherPagePathSynchronizer.getInstance();
+          otherPagePathSynchronizer.updatePendingOpenPath();
+          const tabList = document.querySelectorAll(
+            ".ant-tabs-top-bar .ant-tabs-tab"
+          );
+          const activeTab = document.querySelector(
+            ".ant-tabs-top-bar .ant-tabs-tab-active"
+          );
+          try {
+            const apiTabMap = {
+              [activeTab.innerText]: location.href,
+            };
+            const currentPageOpenApiTabMapStr =
+              sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) ||
+              "{}";
+            const currentPageOpenApiTabMap = JSON.parse(
+              currentPageOpenApiTabMapStr
+            );
+            Array.from(tabList).forEach((tab) => {
+              const innerText = tab.innerText;
+              const api = currentPageOpenApiTabMap[innerText];
+              if (api) {
+                apiTabMap[innerText] = api;
+              }
+            });
+            sessionStorage.setItem(
+              storageKey.currentPageOpenApiTabMap,
+              JSON.stringify(apiTabMap)
+            );
+          } catch (error) {
+            console.error(error);
+          }
         };
         // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
         const observer = new MutationObserver(onTabListChange);

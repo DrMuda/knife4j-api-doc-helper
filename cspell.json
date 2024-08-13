@@ -6,6 +6,8 @@
     "autologjs",
     "contenteditable",
     "xlink",
-    "layui"
+    "layui",
+    "endregion",
+    "tablist"
   ]
 }
