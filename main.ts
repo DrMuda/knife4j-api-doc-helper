@@ -682,12 +682,6 @@ async function replacePath(activeTabPanel: Element) {
   };
 }
 
-/** 跨页面通信同步打开的接口tab
- *
- * 主页面： 最早打开的页面， 如果主页面被关闭， 由其他页面根据各自的打开时间决定出新的主页面
- *
- *
- */
 class OtherPagePathSynchronizer {
   private static instance: OtherPagePathSynchronizer;
   private key: number;
