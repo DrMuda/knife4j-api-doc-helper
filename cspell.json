@@ -8,6 +8,8 @@
     "xlink",
     "layui",
     "endregion",
-    "tablist"
+    "tablist",
+    "pagekey",
+    "kmain"
   ]
 }

@@ -795,23 +795,26 @@ const onTabListChange = async () => {
   generateTsType(activeTabPanelList[0]);
   replacePath(activeTabPanelList[0]);
 
-  const tabList = document.querySelectorAll(".ant-tabs-top-bar .ant-tabs-tab");
-  const activeTab = document.querySelector<HTMLDivElement>(
-    ".ant-tabs-top-bar .ant-tabs-tab-active"
+  const tabSpanList = document.querySelectorAll(
+    ".ant-tabs-top-bar .ant-tabs-tab span"
+  );
+  const activeTabSpan = document.querySelector<HTMLSpanElement>(
+    ".ant-tabs-top-bar .ant-tabs-tab-active span"
   );
 
   try {
     const apiTabMap: Record<string, string> = {
-      [activeTab.innerText]: location.href,
+      [activeTabSpan.getAttribute("pagekey")]: location.href,
     };
     const currentPageOpenApiTabMapStr =
       sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) || "{}";
     const currentPageOpenApiTabMap = JSON.parse(currentPageOpenApiTabMapStr);
-    (Array.from(tabList) as HTMLDivElement[]).forEach((tab) => {
-      const innerText = tab.innerText;
-      const api = currentPageOpenApiTabMap[innerText];
+    (Array.from(tabSpanList) as HTMLDivElement[]).forEach((span) => {
+      const pageKey = span.getAttribute("pagekey");
+      if (pageKey === "kmain") return;
+      const api = currentPageOpenApiTabMap[pageKey];
       if (api) {
-        apiTabMap[innerText] = api;
+        apiTabMap[pageKey] = api;
       }
     });
     sessionStorage.setItem(
