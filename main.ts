@@ -1,12 +1,8 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档功能增强
 // @namespace    http://tampermonkey.net/
-// @version      2024-08-13
-// @description 1. 在 knife4j-v4.5.0 的接口文档页面生成请求参数与响应参数的 TS 类型
-// @description 2. 增加菜单筛选栏
-// @description 3. 自动滚动选中的菜单项到视图中间
-// @description 4. 接口路径前缀替换与点击复制
-// @description 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
+// @version      2024-08-15
+// @description 1. 在 knife4j-v4.5.0 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
 // @author       DrMuda
 // @match        http://*/doc.html
 // @match        https://*/doc.html
