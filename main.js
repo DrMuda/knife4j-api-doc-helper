@@ -611,7 +611,7 @@ class OtherPagePathSynchronizer {
   }
   async syncOtherPage() {
     localStorage.setItem(storageKey.requestSyncPageKey, this.key.toString());
-    await waitTime(1000);
+    await waitTime(500);
     localStorage.removeItem(storageKey.requestSyncPageKey);
     const length = localStorage.length;
     const pathList = [];
@@ -634,6 +634,7 @@ class OtherPagePathSynchronizer {
       await waitTime(500);
     }
     scrollSelectMenuIntoView();
+    message.success("同步完成");
   }
   responseSync() {
     const key = localStorage.getItem(storageKey.requestSyncPageKey);
