@@ -764,68 +764,80 @@ class OtherPagePathSynchronizer {
   }
 }
 
+// 恢复曾经记录下来的接口， 一般是刷新页面时恢复
+const restoreApiPath = async () => {
+  try {
+    const currentPageOpenApiTabMap = JSON.parse(
+      sessionStorage.getItem(storageKey.currentPageOpenApiTabMap)
+    ) as Record<string, string>;
+    for (const path of Object.values(currentPageOpenApiTabMap)) {
+      location.href = path;
+      await waitTime(500);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+const onTabListChange = async () => {
+  // 找到当前显示的tab
+  const activeTabPanelList = await waitElement(
+    ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
+    10,
+    0.5
+  );
+
+  if (!activeTabPanelList || activeTabPanelList.length <= 0) {
+    message.error("没有找到激活中的tab");
+    return;
+  }
+
+  generateTsType(activeTabPanelList[0]);
+  replacePath(activeTabPanelList[0]);
+
+  const tabList = document.querySelectorAll(".ant-tabs-top-bar .ant-tabs-tab");
+  const activeTab = document.querySelector<HTMLDivElement>(
+    ".ant-tabs-top-bar .ant-tabs-tab-active"
+  );
+
+  try {
+    const apiTabMap: Record<string, string> = {
+      [activeTab.innerText]: location.href,
+    };
+    const currentPageOpenApiTabMapStr =
+      sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) || "{}";
+    const currentPageOpenApiTabMap = JSON.parse(currentPageOpenApiTabMapStr);
+    (Array.from(tabList) as HTMLDivElement[]).forEach((tab) => {
+      const innerText = tab.innerText;
+      const api = currentPageOpenApiTabMap[innerText];
+      if (api) {
+        apiTabMap[innerText] = api;
+      }
+    });
+    sessionStorage.setItem(
+      storageKey.currentPageOpenApiTabMap,
+      JSON.stringify(apiTabMap)
+    );
+  } catch (error) {
+    console.error(error);
+  }
+};
+
 (function () {
   "use strict";
   if (window) {
     interceptApiDocs().then(
       async (apiDocs) => {
-        OtherPagePathSynchronizer.getInstance().mount();
         const tabList = (
           await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
         )?.[0];
         if (!tabList) return;
 
+        await restoreApiPath();
+        OtherPagePathSynchronizer.getInstance().mount();
+
         scrollSelectMenuIntoView();
         generateMenuSearchBar(apiDocs);
-
-        const onTabListChange = async () => {
-          // 找到当前显示的tab
-          const activeTabPanelList = await waitElement(
-            ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
-            10,
-            0.5
-          );
-
-          if (!activeTabPanelList || activeTabPanelList.length <= 0) {
-            message.error("没有找到激活中的tab");
-            return;
-          }
-
-          generateTsType(activeTabPanelList[0]);
-          replacePath(activeTabPanelList[0]);
-
-          const tabList = document.querySelectorAll(
-            ".ant-tabs-top-bar .ant-tabs-tab"
-          );
-          const activeTab = document.querySelector<HTMLDivElement>(
-            ".ant-tabs-top-bar .ant-tabs-tab-active"
-          );
-
-          try {
-            const apiTabMap: Record<string, string> = {
-              [activeTab.innerText]: location.href,
-            };
-            const currentPageOpenApiTabMapStr =
-              sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) ||
-              "{}";
-            const currentPageOpenApiTabMap = JSON.parse(
-              currentPageOpenApiTabMapStr
-            );
-            (Array.from(tabList) as HTMLDivElement[]).forEach((tab) => {
-              const innerText = tab.innerText;
-              const api = currentPageOpenApiTabMap[innerText];
-              if (api) {
-                apiTabMap[innerText] = api;
-              }
-            });
-            sessionStorage.setItem(
-              storageKey.currentPageOpenApiTabMap,
-              JSON.stringify(apiTabMap)
-            );
-          } catch (error) {
-            console.error(error);
-          }
-        };
 
         // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
         const observer = new MutationObserver(onTabListChange);
