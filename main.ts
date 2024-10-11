@@ -82,6 +82,8 @@ const componentId = {
   copyResponseTypeBtn: "copyResponseTypeBtn",
   requestTypeContent: "requestTypeContent",
   responseTypeContent: "responseTypeContent",
+  requestCommentSwitch: "requestCommentSwitch",
+  responseCommentSwitch: "responseCommentSwitch",
 };
 /** 缩进空格数量 */
 const indentSpaces = 2;
@@ -113,28 +115,48 @@ interface IPingMsg {
 // #endregion
 
 // #region html模板与样式
-const tsTypeHtmlStr = `
+const originTsTypeHtmlStr = `
 <div class="${componentId.tsTypeContain} ts-type-contain">
   <div class="${componentId.requestTypeContain}">
-    <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
-      复制请求参数
-    </button>
+    <div class="ts-type-bar layui-form">
+      <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
+        复制请求参数
+      </button>
+      <input
+        type="checkbox"
+        name="requestCommentSwitch"
+        title="显示注释|隐藏注释"
+        lay-skin="switch"
+        lay-filter="${componentId.requestCommentSwitch}"
+        checked
+      />
+    </div>
     <pre
       class="type-content"
       contenteditable
     ><code class="${componentId.requestTypeContent}"></code></pre>
   </div>
   <div class="${componentId.responseTypeContain}">
-    <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
-      复制响应参数
-    </button>
+    <div class="ts-type-bar layui-form">
+      <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
+        复制响应参数
+      </button>
+      <input
+        type="checkbox"
+        name="responseCommentRadio"
+        title="显示注释|隐藏注释"
+        lay-skin="switch"
+        lay-filter="${componentId.responseCommentSwitch}"
+        checked
+      />
+    </div>
     <pre
       class="type-content"
       contenteditable
     ><code class="${componentId.responseTypeContent}"></code></pre>
   </div>
 </div>`;
-const tsTypeCssStr = `
+const originTsTypeCssStr = `
 .ts-type-contain {
   display: flex;
 }
@@ -174,6 +196,16 @@ const tsTypeCssStr = `
 .method-post {
   background-color: #46c588;
 }
+
+.ts-type-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ts-type-bar .layui-form-switch {
+  margin-top: 0px;
+}
+
 .keyword {
   color: ${themeColors.keyword};
 }
@@ -189,7 +221,8 @@ const tsTypeCssStr = `
 }
 .primitiveType {
   color: ${themeColors.primitiveType};
-}`;
+}
+`;
 // #endregion
 
 /** 各字段位于哪列 */
@@ -261,7 +294,7 @@ const waitTime = (time: number) => {
 /** 生成ts类型 */
 async function generateTsType(activeTabPanel: Element) {
   const style = document.createElement("style");
-  style.innerHTML = tsTypeCssStr;
+  style.innerHTML = originTsTypeCssStr;
   document.body.appendChild(style);
 
   setMyDom(activeTabPanel);
@@ -314,6 +347,19 @@ async function setMyDom(parentDom: Element) {
     return false;
   }
 
+  const tabId = Date.now();
+  const requestCommentSwitchId = `${tabId}_${componentId.requestCommentSwitch}`;
+  const responseCommentSwitchId = `${tabId}_${componentId.responseCommentSwitch}`;
+  const tsTypeHtmlStr = originTsTypeHtmlStr
+    .replace(
+      `lay-filter="${componentId.requestCommentSwitch}"`,
+      `lay-filter="${requestCommentSwitchId}"`
+    )
+    .replace(
+      `lay-filter="${componentId.responseCommentSwitch}"`,
+      `lay-filter="${responseCommentSwitchId}"`
+    );
+
   const titleContain = targetDom.parentElement;
   const documentDom = targetDom.parentElement.parentElement;
   if (!documentDom) {
@@ -330,6 +376,8 @@ async function setMyDom(parentDom: Element) {
     div.innerHTML = tsTypeHtmlStr;
     documentDom.insertBefore(div, titleContain.nextSibling);
   }
+  // @ts-ignore
+  layui.form.render();
 
   const id = componentId;
   const copyRequestTypeBtn = parentDom.getElementsByClassName(
@@ -347,7 +395,11 @@ async function setMyDom(parentDom: Element) {
   let requestTypeTable = getTableDom("request", documentDom);
   let responseTypeTable = getTableDom("response", documentDom);
 
-  const setType = (type: "request" | "response") => {
+  const setType = (
+    type: "request" | "response",
+    /** 是否带上注释 */
+    withComment: boolean
+  ) => {
     const table = type === "request" ? requestTypeTable : responseTypeTable;
     const colNumConfig =
       type === "request"
@@ -378,7 +430,8 @@ async function setMyDom(parentDom: Element) {
     const tree = createTrTree(Array.from(trList));
     let { tsTypeStr, tsTypeStrWithHighlight } = createTsTypeFromTrTree(
       tree || [],
-      colNumConfig
+      colNumConfig,
+      withComment
     );
 
     typeContent.innerHTML = `<span class="keyword">interface</span> <span class="typeName">Data</span> ${tsTypeStrWithHighlight}`;
@@ -390,23 +443,51 @@ async function setMyDom(parentDom: Element) {
 
   let prevRequestTypeTableInnerHtml = requestTypeTable.innerHTML;
   let prevResponseTypeTableInnerHtml = responseTypeTable.innerHTML;
-  setType("request");
-  setType("response");
-  // 有时候会因为网络或者其他问题， 表格数据没有加载完全， 获取到的类型全是 unknown， 在这里判断dom有无变化
-  // 用MutationObserver监听不到， 不知为何
-  for (let count = 0; count < 20; count++) {
-    await waitTime(100);
-    let newRequestTypeTable = getTableDom("request", documentDom);
-    let newResponseTypeTable = getTableDom("response", documentDom);
-    if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
-      requestTypeTable = newRequestTypeTable;
-      setType("request");
+  setType("request", true);
+  setType("response", true);
+
+  // 注册 注释开关事件
+  // @ts-ignore
+  layui.use(function () {
+    // @ts-ignore
+    const form = layui.form;
+    form.on(`switch(${requestCommentSwitchId})`, function (data) {
+      const checked = data?.elem?.checked;
+      if (checked === true) {
+        setType("request", true);
+      }
+      if (checked === false) {
+        setType("request", false);
+      }
+    });
+    form.on(`switch(${responseCommentSwitchId})`, function (data) {
+      const checked = data?.elem?.checked;
+      if (checked === true) {
+        setType("response", true);
+      }
+      if (checked === false) {
+        setType("response", false);
+      }
+    });
+  });
+
+  new Promise(async () => {
+    // 有时候会因为网络或者其他问题， 表格数据没有加载完全， 获取到的类型全是 unknown， 在这里判断dom有无变化
+    // 用MutationObserver监听不到， 不知为何
+    for (let count = 0; count < 20; count++) {
+      await waitTime(100);
+      let newRequestTypeTable = getTableDom("request", documentDom);
+      let newResponseTypeTable = getTableDom("response", documentDom);
+      if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
+        requestTypeTable = newRequestTypeTable;
+        setType("request", true);
+      }
+      if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
+        responseTypeTable = newResponseTypeTable;
+        setType("response", true);
+      }
     }
-    if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
-      responseTypeTable = newResponseTypeTable;
-      setType("response");
-    }
-  }
+  });
 
   return true;
 }
@@ -474,6 +555,8 @@ function createTsTypeFromTrTree(
   trTree: TrTreeNode[],
   /** 各数据在哪一列 */
   colNumConfig: ColNumConfig,
+  /** 是否生成注释 */
+  withComment: boolean,
   level: number = 1
 ) {
   let tsTypeStr = "{\n";
@@ -492,10 +575,19 @@ function createTsTypeFromTrTree(
     const key = `${indent}${fieldName}${requiredChar}`;
     const highlightKey = `${indent}<span class="property" >${fieldName}</span>${requiredChar}`;
 
-    tsTypeStr += `${indent}/** ${annotation} */\n`;
-    tsTypeStrWithHighlight += `${indent}<span class="comment" >/** ${annotation} */</span>\n`;
+    // 注释
+    if (withComment) {
+      tsTypeStr += `${indent}/** ${annotation} */\n`;
+      tsTypeStrWithHighlight += `${indent}<span class="comment" >/** ${annotation} */</span>\n`;
+    }
+
     if (children.length > 0) {
-      const child = createTsTypeFromTrTree(children, colNumConfig, level + 1);
+      const child = createTsTypeFromTrTree(
+        children,
+        colNumConfig,
+        withComment,
+        level + 1
+      );
       tsTypeStr += `${key}: ${child.tsTypeStr}`;
       tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}`;
       if (type === "array") {
@@ -533,9 +625,9 @@ function getTrLevel(tr: HTMLTableRowElement) {
 function javaTypeToTsType(javaType: string) {
   if (javaType.includes("string")) return "string";
   if (javaType.includes("integer")) return "number";
-  if (javaType === "boolean") return "boolean";
-  if (javaType === "file") return "File";
-  if (javaType === "number") return "number";
+  if (javaType.includes("boolean")) return "boolean";
+  if (javaType.includes("file")) return "File";
+  if (javaType.includes("number")) return "number";
   return "unknownType";
 }
 
@@ -592,43 +684,38 @@ async function generateMenuSearchBar(apiDocs: ApiDoc) {
   menu.setAttribute("style", "height: calc(100vh - 64px - 54px);");
   form.setAttribute("style", "margin: -15px -3px 0 8px");
 
-  const script = document.createElement("script");
-  script.src = "//unpkg.com/layui@2.9.10/dist/layui.js";
-  script.onload = () => {
+  // @ts-ignore
+  layui.form.render();
+  // @ts-ignore
+  layui.use(function () {
     // @ts-ignore
-    layui.use(function () {
-      // @ts-ignore
-      const form = layui.form;
-      // 监听 select 事件， 选中后找相应的一个菜单项进行 模拟点击
-      form.on("select(handleSelect)", async function (data) {
-        const value = data.value as string; // 获得被选中的值
-        const paths = value.split("/").map((item) => decodeURIComponent(item));
-        let parentDom = menu;
-        for (const path of paths) {
-          const liList = Array.from(
-            parentDom.querySelectorAll(`ul>li`)
-          ) as HTMLSpanElement[];
-          const li = liList.find((li) => li.innerText.includes(path));
-          if (!li) break;
-          li?.getElementsByTagName("span")?.[0].click();
-          await waitTime(100);
-          parentDom = li;
-        }
-        scrollSelectMenuIntoView();
-      });
+    const form = layui.form;
+    // 监听 select 事件， 选中后找相应的一个菜单项进行 模拟点击
+    form.on("select(handleSelect)", async function (data) {
+      const value = data.value as string; // 获得被选中的值
+      const paths = value.split("/").map((item) => decodeURIComponent(item));
+      let parentDom = menu;
+      for (const path of paths) {
+        const liList = Array.from(
+          parentDom.querySelectorAll(`ul>li`)
+        ) as HTMLSpanElement[];
+        const li = liList.find((li) => li.innerText.includes(path));
+        if (!li) break;
+        li?.getElementsByTagName("span")?.[0].click();
+        await waitTime(100);
+        parentDom = li;
+      }
+      scrollSelectMenuIntoView();
     });
-    // layui中如果 options 的内容不是纯文本， 会额外多出一些无效选项， 移除这个无效选项
-    setTimeout(() => {
-      Array.from(form.querySelectorAll(".layui-anim dd") || []).forEach(
-        (dd) => {
-          const span = dd.getElementsByTagName("span")?.[0];
-          if (span) return;
-          dd.remove();
-        }
-      );
-    }, 100);
-  };
-  document.body.appendChild(script);
+  });
+  // layui中如果 options 的内容不是纯文本， 会额外多出一些无效选项， 移除这个无效选项
+  setTimeout(() => {
+    Array.from(form.querySelectorAll(".layui-anim dd") || []).forEach((dd) => {
+      const span = dd.getElementsByTagName("span")?.[0];
+      if (span) return;
+      dd.remove();
+    });
+  }, 100);
 }
 
 /** 拦截文档接口的数据 */
@@ -828,12 +915,17 @@ const onTabListChange = async () => {
   if (window) {
     interceptApiDocs().then(
       async (apiDocs) => {
+        const script = document.createElement("script");
+        script.src = "//unpkg.com/layui@2.9.10/dist/layui.js";
+        document.body.appendChild(script);
+
         const tabList = (
           await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
         )?.[0];
         if (!tabList) return;
 
-        await restoreApiPath();
+        // 不好用， 先关掉吧
+        // await restoreApiPath();
         OtherPagePathSynchronizer.getInstance().mount();
 
         scrollSelectMenuIntoView();

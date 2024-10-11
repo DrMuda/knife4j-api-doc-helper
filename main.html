@@ -1,17 +1,37 @@
 <div class="${componentId.tsTypeContain} ts-type-contain">
   <div class="${componentId.requestTypeContain}">
-    <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
-      复制请求参数
-    </button>
+    <div class="ts-type-bar layui-form">
+      <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
+        复制请求参数
+      </button>
+      <input
+        type="checkbox"
+        name="requestCommentSwitch"
+        title="显示注释|隐藏注释"
+        lay-skin="switch"
+        lay-filter="${componentId.requestCommentSwitch}"
+        checked
+      />
+    </div>
     <pre
       class="type-content"
       contenteditable
     ><code class="${componentId.requestTypeContent}"></code></pre>
   </div>
   <div class="${componentId.responseTypeContain}">
-    <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
-      复制响应参数
-    </button>
+    <div class="ts-type-bar layui-form">
+      <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
+        复制响应参数
+      </button>
+      <input
+        type="checkbox"
+        name="responseCommentRadio"
+        title="显示注释|隐藏注释"
+        lay-skin="switch"
+        lay-filter="${componentId.responseCommentSwitch}"
+        checked
+      />
+    </div>
     <pre
       class="type-content"
       contenteditable
@@ -58,5 +78,14 @@
   }
   .method-post {
     background-color: #46c588;
+  }
+
+  .ts-type-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .ts-type-bar .layui-form-switch {
+    margin-top: 0px;
   }
 </style>
