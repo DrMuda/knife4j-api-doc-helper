@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档功能增强
 // @namespace    http://tampermonkey.net/
-// @version      2024-08-15
+// @version      2024-10-11
 // @description 1. 在 knife4j-v4.5.0 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
 // @author       DrMuda
 // @match        http://*/doc.html
@@ -9,7 +9,6 @@
 // @match        http://*/*/doc.html
 // @match        https://*/*/doc.html
 // @license MIT
-// @resource css https://unpkg.com/layui@2.9.10/dist/css/layui.css
 // @grant    GM_getResourceURL
 // @grant    GM_getResourceText
 // @grant    GM_addStyle
@@ -80,6 +79,7 @@ const componentId = {
   responseTypeContent: "responseTypeContent",
   requestCommentSwitch: "requestCommentSwitch",
   responseCommentSwitch: "responseCommentSwitch",
+  hideNullCommentCheckbox: "hideNullCommentCheckbox",
 };
 /** 缩进空格数量 */
 const indentSpaces = 2;
@@ -99,49 +99,63 @@ const storageKey = {
   currentPageOpenApiTabMap: "currentPageOpenApiTabMap",
   requestSyncPageKey: "requestSyncPageKey",
   responseSync: "responseSync",
+  hideNullComment: "hideNullComment",
 };
 const heartbeatTimeout = 1500;
 // #endregion
 // #region html模板与样式
 const originTsTypeHtmlStr = `
-<div class="${componentId.tsTypeContain} ts-type-contain">
-  <div class="${componentId.requestTypeContain}">
-    <div class="ts-type-bar layui-form">
-      <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
-        复制请求参数
-      </button>
-      <input
-        type="checkbox"
-        name="requestCommentSwitch"
-        title="显示注释|隐藏注释"
-        lay-skin="switch"
-        lay-filter="${componentId.requestCommentSwitch}"
-        checked
-      />
-    </div>
-    <pre
-      class="type-content"
-      contenteditable
-    ><code class="${componentId.requestTypeContent}"></code></pre>
+<div>
+  <div class="config-bar layui-form">
+    <input
+      class="${componentId.hideNullCommentCheckbox}"
+      type="checkbox"
+      name="hideNullCommentCheckbox"
+      value="1"
+      title="隐藏空注释"
+      lay-filter="${componentId.hideNullCommentCheckbox}"
+      checked
+    />
   </div>
-  <div class="${componentId.responseTypeContain}">
-    <div class="ts-type-bar layui-form">
-      <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
-        复制响应参数
-      </button>
-      <input
-        type="checkbox"
-        name="responseCommentRadio"
-        title="显示注释|隐藏注释"
-        lay-skin="switch"
-        lay-filter="${componentId.responseCommentSwitch}"
-        checked
-      />
+  <div class="${componentId.tsTypeContain} ts-type-contain">
+    <div class="${componentId.requestTypeContain}">
+      <div class="ts-type-bar layui-form">
+        <button class="${componentId.copyRequestTypeBtn} copy-type-btn">
+          复制请求参数
+        </button>
+        <input
+          type="checkbox"
+          name="requestCommentSwitch"
+          title="显示注释|隐藏注释"
+          lay-skin="switch"
+          lay-filter="${componentId.requestCommentSwitch}"
+          checked
+        />
+      </div>
+      <pre
+        class="type-content"
+        contenteditable
+      ><code class="${componentId.requestTypeContent}"></code></pre>
     </div>
-    <pre
-      class="type-content"
-      contenteditable
-    ><code class="${componentId.responseTypeContent}"></code></pre>
+    <div class="${componentId.responseTypeContain}">
+      <div class="ts-type-bar layui-form">
+        <button class="${componentId.copyResponseTypeBtn} copy-type-btn">
+          复制响应参数
+        </button>
+        <input
+          type="checkbox"
+          name="responseCommentRadio"
+          title="显示注释|隐藏注释"
+          lay-skin="switch"
+          lay-filter="${componentId.responseCommentSwitch}"
+          checked
+        />
+      </div>
+      <pre
+        class="type-content"
+        contenteditable
+      ><code class="${componentId.responseTypeContent}"></code></pre>
+    </div>
   </div>
 </div>`;
 const originTsTypeCssStr = `
@@ -192,6 +206,10 @@ const originTsTypeCssStr = `
 }
 .ts-type-bar .layui-form-switch {
   margin-top: 0px;
+}
+
+.config-bar{
+  padding: 4px 0;
 }
 
 .keyword {
@@ -295,6 +313,20 @@ async function setMyDom(parentDom) {
     div.innerHTML = tsTypeHtmlStr;
     documentDom.insertBefore(div, titleContain.nextSibling);
   }
+  const hideNullCommentCheckboxList = await waitElement(
+    `.${componentId.hideNullCommentCheckbox}`,
+    2,
+    0.1
+  );
+  hideNullCommentCheckboxList.forEach((item) => {
+    if (getHideNullComment()) {
+      console.log("true");
+      item.setAttribute("checked", "true");
+    } else {
+      console.log("false");
+      item.removeAttribute("checked");
+    }
+  });
   // @ts-ignore
   layui.form.render();
   const id = componentId;
@@ -315,7 +347,9 @@ async function setMyDom(parentDom) {
   const setType = (
     type,
     /** 是否带上注释 */
-    withComment
+    withComment,
+    /** 是否隐藏空注释 */
+    hideNullComment
   ) => {
     const table = type === "request" ? requestTypeTable : responseTypeTable;
     const colNumConfig =
@@ -346,8 +380,11 @@ async function setMyDom(parentDom) {
     const tree = createTrTree(Array.from(trList));
     let { tsTypeStr, tsTypeStrWithHighlight } = createTsTypeFromTrTree(
       tree || [],
-      colNumConfig,
-      withComment
+      {
+        colNumConfig,
+        withComment,
+        hideNullComment,
+      }
     );
     typeContent.innerHTML = `<span class="keyword">interface</span> <span class="typeName">Data</span> ${tsTypeStrWithHighlight}`;
     copyTypeBtn.onclick = () => {
@@ -357,31 +394,55 @@ async function setMyDom(parentDom) {
   };
   let prevRequestTypeTableInnerHtml = requestTypeTable.innerHTML;
   let prevResponseTypeTableInnerHtml = responseTypeTable.innerHTML;
-  setType("request", true);
-  setType("response", true);
+  setType("request", true, getHideNullComment());
+  setType("response", true, getHideNullComment());
   // 注册 注释开关事件
   // @ts-ignore
   layui.use(function () {
     // @ts-ignore
     const form = layui.form;
+    const checkedStatus = {
+      requestCommentSwitchId: true,
+      responseCommentSwitchId: true,
+    };
     form.on(`switch(${requestCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType("request", true);
+        setType("request", true, getHideNullComment());
+        checkedStatus.requestCommentSwitchId = true;
       }
       if (checked === false) {
-        setType("request", false);
+        setType("request", false, getHideNullComment());
+        checkedStatus.requestCommentSwitchId = false;
       }
     });
     form.on(`switch(${responseCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType("response", true);
+        setType("response", true, getHideNullComment());
+        checkedStatus.responseCommentSwitchId = true;
       }
       if (checked === false) {
-        setType("response", false);
+        setType("response", false, getHideNullComment());
+        checkedStatus.responseCommentSwitchId = false;
       }
     });
+    form.on(
+      `checkbox(${componentId.hideNullCommentCheckbox})`,
+      function (data) {
+        const checked = data?.elem?.checked;
+        if (checked === true) {
+          localStorage.setItem(storageKey.hideNullComment, "true");
+          setType("request", checkedStatus.requestCommentSwitchId, true);
+          setType("response", checkedStatus.responseCommentSwitchId, true);
+        }
+        if (checked === false) {
+          localStorage.setItem(storageKey.hideNullComment, "false");
+          setType("request", checkedStatus.responseCommentSwitchId, false);
+          setType("response", checkedStatus.responseCommentSwitchId, false);
+        }
+      }
+    );
   });
   new Promise(async () => {
     // 有时候会因为网络或者其他问题， 表格数据没有加载完全， 获取到的类型全是 unknown， 在这里判断dom有无变化
@@ -392,11 +453,11 @@ async function setMyDom(parentDom) {
       let newResponseTypeTable = getTableDom("response", documentDom);
       if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
         requestTypeTable = newRequestTypeTable;
-        setType("request", true);
+        setType("request", true, getHideNullComment());
       }
       if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
         responseTypeTable = newResponseTypeTable;
-        setType("response", true);
+        setType("response", true, getHideNullComment());
       }
     }
   });
@@ -454,16 +515,10 @@ function createTrTree(trList) {
   return tree;
 }
 /** 从树形tr创建tsType字符串 */
-function createTsTypeFromTrTree(
-  trTree,
-  /** 各数据在哪一列 */
-  colNumConfig,
-  /** 是否生成注释 */
-  withComment,
-  level = 1
-) {
+function createTsTypeFromTrTree(trTree, config, level = 1) {
   let tsTypeStr = "{\n";
   let tsTypeStrWithHighlight = "{\n";
+  const { colNumConfig, hideNullComment, withComment } = config;
   /** 缩进 */
   const indent = new Array(level * indentSpaces).fill(" ").join("");
   for (const { ele, children = [] } of trTree) {
@@ -478,16 +533,13 @@ function createTsTypeFromTrTree(
     const highlightKey = `${indent}<span class="property" >${fieldName}</span>${requiredChar}`;
     // 注释
     if (withComment) {
-      tsTypeStr += `${indent}/** ${annotation} */\n`;
-      tsTypeStrWithHighlight += `${indent}<span class="comment" >/** ${annotation} */</span>\n`;
+      if (!(hideNullComment && !annotation)) {
+        tsTypeStr += `${indent}/** ${annotation} */\n`;
+        tsTypeStrWithHighlight += `${indent}<span class="comment" >/** ${annotation} */</span>\n`;
+      }
     }
     if (children.length > 0) {
-      const child = createTsTypeFromTrTree(
-        children,
-        colNumConfig,
-        withComment,
-        level + 1
-      );
+      const child = createTsTypeFromTrTree(children, config, level + 1);
       tsTypeStr += `${key}: ${child.tsTypeStr}`;
       tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}`;
       if (type === "array") {
@@ -742,6 +794,18 @@ const restoreApiPath = async () => {
     console.error(error);
   }
 };
+// 获取hideNullComment
+const getHideNullComment = () => {
+  const hideNullCommentStr = localStorage.getItem(storageKey.hideNullComment);
+  if (!hideNullCommentStr) {
+    localStorage.setItem(storageKey.hideNullComment, "true");
+    return true;
+  }
+  if (hideNullCommentStr === "true") {
+    return true;
+  }
+  return false;
+};
 const onTabListChange = async () => {
   // 找到当前显示的tab
   const activeTabPanelList = await waitElement(
@@ -789,22 +853,30 @@ const onTabListChange = async () => {
   if (window) {
     interceptApiDocs().then(
       async (apiDocs) => {
+        // 直接用 @require 引入会导致字体文件用了当前网页的域名去加载， 以至于加载失败
         const script = document.createElement("script");
         script.src = "//unpkg.com/layui@2.9.10/dist/layui.js";
+        const styles = document.createElement("link");
+        styles.href = "//unpkg.com/layui@2.9.10/dist/css/layui.css";
+        styles.rel = "stylesheet";
         document.body.appendChild(script);
+        document.body.appendChild(styles);
         const tabList = (
           await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
         )?.[0];
         if (!tabList) return;
+        // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
+        const observer = new MutationObserver(onTabListChange);
+        const config = { childList: true, subtree: true };
+        observer.observe(tabList, config);
+        await new Promise((resolve) => {
+          script.onload = resolve;
+        });
         // 不好用， 先关掉吧
         // await restoreApiPath();
         OtherPagePathSynchronizer.getInstance().mount();
         scrollSelectMenuIntoView();
         generateMenuSearchBar(apiDocs);
-        // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
-        const observer = new MutationObserver(onTabListChange);
-        const config = { childList: true, subtree: true };
-        observer.observe(tabList, config);
       },
       () => {
         message.error("拦截接口数据失败");
