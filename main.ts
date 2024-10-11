@@ -402,10 +402,8 @@ async function setMyDom(parentDom: Element) {
   );
   hideNullCommentCheckboxList.forEach((item) => {
     if (getHideNullComment()) {
-      console.log("true");
       item.setAttribute("checked", "true");
     } else {
-      console.log("false");
       item.removeAttribute("checked");
     }
   });
