@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档功能增强
 // @namespace    http://tampermonkey.net/
-// @version      2024-10-11
+// @version      2025-03-04
 // @description 1. 在 knife4j-v4.5.0 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
 // @author       DrMuda
 // @match        http://*/doc.html
@@ -16,7 +16,7 @@
 // ==/UserScript==
 
 // @ts-ignore
-GM_addStyle(GM_getResourceText("css"));
+GM_addStyle(GM_getResourceText('css'));
 
 // #region autologjs
 const cssStr = `#autolog{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;pointer-events:none;width:100vw;height:100vh;position:fixed;left:0;top:0;z-index:9999999;cursor:pointer;transition:0.2s}#autolog span{pointer-events:auto;width:max-content;animation:fadein 0.4s;animation-delay:0s;border-radius:6px;padding:10px 20px;box-shadow:0 0 10px 6px rgba(0,0,0,0.1);margin:4px;transition:0.2s;z-index:9999999;font-size:14px;display:flex;align-items:center;justify-content:center;gap:4px;height:max-content}#autolog span.hide{opacity:0;pointer-events:none;transform:translateY(-10px);height:0;padding:0;margin:0}.autolog-warn{background-color:#fffaec;color:#e29505}.autolog-error{background-color:#fde7e7;color:#d93025}.autolog-info{background-color:#e6f7ff;color:#0e6eb8}.autolog-success{background-color:#e9f7e7;color:#1a9e2c}.autolog-{background-color:#fafafa;color:#333}@keyframes fadein{0%{opacity:0;transform:translateY(-10px)}100%{opacity:1;transform:translateY(0)}}`;
@@ -28,12 +28,12 @@ const svgIcons = {
 };
 const log = (type: string, text: string, time: number) => {
   let mainEl = getMainElement();
-  let el = document.createElement("span");
+  let el = document.createElement('span');
   el.className = `autolog-${type}`;
   el.innerHTML = svgIcons[type] + text;
   mainEl.appendChild(el);
   setTimeout(() => {
-    el.classList.add("hide");
+    el.classList.add('hide');
   }, time - 500);
   setTimeout(() => {
     mainEl.removeChild(el);
@@ -42,28 +42,28 @@ const log = (type: string, text: string, time: number) => {
 };
 const message = {
   default(text: string, time = 2500) {
-    log("", text, time);
+    log('', text, time);
   },
   success(text: string, time = 2500) {
-    log("success", text, time);
+    log('success', text, time);
   },
   warn(text: string, time = 2500) {
-    log("warn", text, time);
+    log('warn', text, time);
   },
   error(text: string, time = 2500) {
-    log("error", text, time);
+    log('error', text, time);
   },
   info(text: string, time = 2500) {
-    log("info", text, time);
+    log('info', text, time);
   },
 };
 function getMainElement() {
-  let mainEl = document.querySelector("#autolog");
+  let mainEl = document.querySelector('#autolog');
   if (!mainEl) {
-    mainEl = document.createElement("div");
-    mainEl.id = "autolog";
+    mainEl = document.createElement('div');
+    mainEl.id = 'autolog';
     document.body.appendChild(mainEl);
-    let style = document.createElement("style");
+    let style = document.createElement('style');
     style.innerHTML = cssStr;
     document.head.insertBefore(style, document.head.firstChild);
   }
@@ -74,38 +74,42 @@ function getMainElement() {
 // #region 常量
 /** 元素组件的id */
 const componentId = {
-  tsTypeContain: "tsTypeContain",
-  requestTypeContain: "requestTypeContain",
-  responseTypeContain: "responseTypeContain",
-  copyRequestTypeBtn: "copyRequestTypeBtn",
-  copyResponseTypeBtn: "copyResponseTypeBtn",
-  requestTypeContent: "requestTypeContent",
-  responseTypeContent: "responseTypeContent",
-  requestCommentSwitch: "requestCommentSwitch",
-  responseCommentSwitch: "responseCommentSwitch",
-  hideNullCommentCheckbox: "hideNullCommentCheckbox",
+  tsTypeContain: 'tsTypeContain',
+  requestTypeContain: 'requestTypeContain',
+  responseTypeContain: 'responseTypeContain',
+  copyRequestTypeBtn: 'copyRequestTypeBtn',
+  copyResponseTypeBtn: 'copyResponseTypeBtn',
+  requestTypeContent: 'requestTypeContent',
+  responseTypeContent: 'responseTypeContent',
+  requestCommentSwitch: 'requestCommentSwitch',
+  responseCommentSwitch: 'responseCommentSwitch',
+  hideNullCommentCheckbox: 'hideNullCommentCheckbox',
+  replacePathConfigDialog: 'replacePathConfigDialog',
+  openDialogBtn: 'openDialogBtn',
+  syncButton: 'syncButton',
 };
 /** 缩进空格数量 */
 const indentSpaces = 2;
 const themeColors = {
   /** 关键字 蓝色 */
-  keyword: "#0000FF",
+  keyword: '#0000FF',
   /** 类型名 蓝绿 */
-  typeName: "#267f99",
+  typeName: '#267f99',
   /** 注释 绿色 */
-  comment: "#008000",
+  comment: '#008000',
   /** 属性名 红色 */
-  property: "#a60909",
+  property: '#a60909',
   /** 原始TS类型 蓝色 */
-  primitiveType: "#0000FF",
+  primitiveType: '#0000FF',
 };
 const storageKey = {
-  currentPageOpenApiTabMap: "currentPageOpenApiTabMap",
-  requestSyncPageKey: "requestSyncPageKey",
-  responseSync: "responseSync",
-  hideNullComment: "hideNullComment",
+  currentPageOpenApiTabMap: 'currentPageOpenApiTabMap',
+  requestSyncPageKey: 'requestSyncPageKey',
+  responseSync: 'responseSync',
+  hideNullComment: 'hideNullComment',
 } as const;
 const heartbeatTimeout = 1500;
+let currentActiveTabPanel: Element | null = null;
 interface IPageActivePathMap {
   [key: string]: string;
 }
@@ -311,7 +315,7 @@ const waitTime = (time: number) => {
 
 /** 生成ts类型 */
 async function generateTsType(activeTabPanel: Element) {
-  const style = document.createElement("style");
+  const style = document.createElement('style');
   style.innerHTML = originTsTypeCssStr;
   document.body.appendChild(style);
 
@@ -358,10 +362,10 @@ function debounce<T>(callback: (...args: T[]) => void, wait: number) {
 async function setMyDom(parentDom: Element) {
   // 获取新增Dom的指定位置
   const targetDom = (
-    await waitElement(".knife4j-api-title", 10, 0.5, parentDom)
+    await waitElement('.knife4j-api-title', 10, 0.5, parentDom)
   )?.[0];
   if (!targetDom) {
-    message.warn("没找到knife4j-api-title");
+    message.warn('没找到knife4j-api-title');
     return false;
   }
 
@@ -381,7 +385,7 @@ async function setMyDom(parentDom: Element) {
   const titleContain = targetDom.parentElement;
   const documentDom = targetDom.parentElement.parentElement;
   if (!documentDom) {
-    message.error("没找到 document 容器");
+    message.error('没找到 document 容器');
     return;
   }
   const exitsTsTypeContain = parentDom.getElementsByClassName(
@@ -390,7 +394,7 @@ async function setMyDom(parentDom: Element) {
   if (exitsTsTypeContain) {
     exitsTsTypeContain.parentElement.innerHTML = tsTypeHtmlStr;
   } else {
-    const div = document.createElement("div");
+    const div = document.createElement('div');
     div.innerHTML = tsTypeHtmlStr;
     documentDom.insertBefore(div, titleContain.nextSibling);
   }
@@ -402,9 +406,9 @@ async function setMyDom(parentDom: Element) {
   );
   hideNullCommentCheckboxList.forEach((item) => {
     if (getHideNullComment()) {
-      item.setAttribute("checked", "true");
+      item.setAttribute('checked', 'true');
     } else {
-      item.removeAttribute("checked");
+      item.removeAttribute('checked');
     }
   });
 
@@ -424,19 +428,19 @@ async function setMyDom(parentDom: Element) {
   const responseTypeContent = parentDom.getElementsByClassName(
     id.responseTypeContent
   )?.[0];
-  let requestTypeTable = getTableDom("request", documentDom);
-  let responseTypeTable = getTableDom("response", documentDom);
+  let requestTypeTable = getTableDom('request', documentDom);
+  let responseTypeTable = getTableDom('response', documentDom);
 
   const setType = (
-    type: "request" | "response",
+    type: 'request' | 'response',
     /** 是否带上注释 */
     withComment: boolean,
     /** 是否隐藏空注释 */
     hideNullComment: boolean
   ) => {
-    const table = type === "request" ? requestTypeTable : responseTypeTable;
+    const table = type === 'request' ? requestTypeTable : responseTypeTable;
     const colNumConfig =
-      type === "request"
+      type === 'request'
         ? {
             fieldName: 0,
             annotation: 1,
@@ -452,15 +456,15 @@ async function setMyDom(parentDom: Element) {
             schema: 3,
           };
     const typeContent =
-      type === "request" ? requestTypeContent : responseTypeContent;
+      type === 'request' ? requestTypeContent : responseTypeContent;
     const copyTypeBtn = (
-      type === "request" ? copyRequestTypeBtn : copyResponseTypeBtn
+      type === 'request' ? copyRequestTypeBtn : copyResponseTypeBtn
     ) as HTMLButtonElement;
     const successMsg =
-      type === "request" ? "复制请求参数成功" : "复制响应参数成功";
+      type === 'request' ? '复制请求参数成功' : '复制响应参数成功';
     const trList = table
-      .getElementsByTagName("tbody")[0]
-      .getElementsByTagName("tr");
+      .getElementsByTagName('tbody')[0]
+      .getElementsByTagName('tr');
     const tree = createTrTree(Array.from(trList));
     let { tsTypeStr, tsTypeStrWithHighlight } = createTsTypeFromTrTree(
       tree || [],
@@ -473,15 +477,15 @@ async function setMyDom(parentDom: Element) {
 
     typeContent.innerHTML = `<span class="keyword">interface</span> <span class="typeName">Data</span> ${tsTypeStrWithHighlight}`;
     copyTypeBtn.onclick = () => {
-      window.navigator.clipboard.writeText(`interface Data ${tsTypeStr}` || "");
+      window.navigator.clipboard.writeText(`interface Data ${tsTypeStr}` || '');
       message.success(successMsg);
     };
   };
 
   let prevRequestTypeTableInnerHtml = requestTypeTable.innerHTML;
   let prevResponseTypeTableInnerHtml = responseTypeTable.innerHTML;
-  setType("request", true, getHideNullComment());
-  setType("response", true, getHideNullComment());
+  setType('request', true, getHideNullComment());
+  setType('response', true, getHideNullComment());
 
   // 注册 注释开关事件
   // @ts-ignore
@@ -496,22 +500,22 @@ async function setMyDom(parentDom: Element) {
     form.on(`switch(${requestCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType("request", true, getHideNullComment());
+        setType('request', true, getHideNullComment());
         checkedStatus.requestCommentSwitchId = true;
       }
       if (checked === false) {
-        setType("request", false, getHideNullComment());
+        setType('request', false, getHideNullComment());
         checkedStatus.requestCommentSwitchId = false;
       }
     });
     form.on(`switch(${responseCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType("response", true, getHideNullComment());
+        setType('response', true, getHideNullComment());
         checkedStatus.responseCommentSwitchId = true;
       }
       if (checked === false) {
-        setType("response", false, getHideNullComment());
+        setType('response', false, getHideNullComment());
         checkedStatus.responseCommentSwitchId = false;
       }
     });
@@ -520,14 +524,14 @@ async function setMyDom(parentDom: Element) {
       function (data) {
         const checked = data?.elem?.checked;
         if (checked === true) {
-          localStorage.setItem(storageKey.hideNullComment, "true");
-          setType("request", checkedStatus.requestCommentSwitchId, true);
-          setType("response", checkedStatus.responseCommentSwitchId, true);
+          localStorage.setItem(storageKey.hideNullComment, 'true');
+          setType('request', checkedStatus.requestCommentSwitchId, true);
+          setType('response', checkedStatus.responseCommentSwitchId, true);
         }
         if (checked === false) {
-          localStorage.setItem(storageKey.hideNullComment, "false");
-          setType("request", checkedStatus.responseCommentSwitchId, false);
-          setType("response", checkedStatus.responseCommentSwitchId, false);
+          localStorage.setItem(storageKey.hideNullComment, 'false');
+          setType('request', checkedStatus.responseCommentSwitchId, false);
+          setType('response', checkedStatus.responseCommentSwitchId, false);
         }
       }
     );
@@ -538,15 +542,15 @@ async function setMyDom(parentDom: Element) {
     // 用MutationObserver监听不到， 不知为何
     for (let count = 0; count < 20; count++) {
       await waitTime(100);
-      let newRequestTypeTable = getTableDom("request", documentDom);
-      let newResponseTypeTable = getTableDom("response", documentDom);
+      let newRequestTypeTable = getTableDom('request', documentDom);
+      let newResponseTypeTable = getTableDom('response', documentDom);
       if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
         requestTypeTable = newRequestTypeTable;
-        setType("request", true, getHideNullComment());
+        setType('request', true, getHideNullComment());
       }
       if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
         responseTypeTable = newResponseTypeTable;
-        setType("response", true, getHideNullComment());
+        setType('response', true, getHideNullComment());
       }
     }
   });
@@ -555,10 +559,10 @@ async function setMyDom(parentDom: Element) {
 }
 
 /** 获取请求参数或响应参数的 表格的dom */
-function getTableDom(type: "request" | "response", parentElement: Element) {
-  const targetInnerText = type === "request" ? "请求参数" : "响应参数";
+function getTableDom(type: 'request' | 'response', parentElement: Element) {
+  const targetInnerText = type === 'request' ? '请求参数' : '响应参数';
   const titleDomList = Array.from(
-    parentElement.getElementsByClassName("api-title")
+    parentElement.getElementsByClassName('api-title')
   ) as HTMLDivElement[];
   const requestParamsTitleIndex = titleDomList.findIndex(
     (dom) => dom.innerText === targetInnerText
@@ -568,8 +572,8 @@ function getTableDom(type: "request" | "response", parentElement: Element) {
   const tableIdex =
     targetDomChildren.findIndex((dom) => dom === targetTitleDom) + 1;
   const table = Array.from(targetTitleDom.parentElement!.children)[tableIdex];
-  if (!table?.className.includes("ant-table-wrapper")) {
-    message.warn("没找到ant-table-wrapper");
+  if (!table?.className.includes('ant-table-wrapper')) {
+    message.warn('没找到ant-table-wrapper');
     return null;
   }
   return table;
@@ -625,20 +629,20 @@ function createTsTypeFromTrTree(
   },
   level: number = 1
 ) {
-  let tsTypeStr = "{\n";
-  let tsTypeStrWithHighlight = "{\n";
+  let tsTypeStr = '{\n';
+  let tsTypeStrWithHighlight = '{\n';
   const { colNumConfig, hideNullComment, withComment } = config;
   /** 缩进 */
-  const indent = new Array(level * indentSpaces).fill(" ").join("");
+  const indent = new Array(level * indentSpaces).fill(' ').join('');
   for (const { ele, children = [] } of trTree) {
-    const tdList = Array.from(ele.getElementsByTagName("td"));
+    const tdList = Array.from(ele.getElementsByTagName('td'));
     const fieldName = tdList[colNumConfig.fieldName]?.innerText;
     const annotation = tdList[colNumConfig.annotation]?.innerText;
-    const isRequired = tdList[colNumConfig.isRequired]?.innerText || "true";
+    const isRequired = tdList[colNumConfig.isRequired]?.innerText || 'true';
     const type = tdList[colNumConfig.type]?.innerText;
     const schema = tdList[colNumConfig.schema]?.innerText;
 
-    const requiredChar = isRequired === "false" ? "?" : "";
+    const requiredChar = isRequired === 'false' ? '?' : '';
     const key = `${indent}${fieldName}${requiredChar}`;
     const highlightKey = `${indent}<span class="property" >${fieldName}</span>${requiredChar}`;
 
@@ -654,15 +658,15 @@ function createTsTypeFromTrTree(
       const child = createTsTypeFromTrTree(children, config, level + 1);
       tsTypeStr += `${key}: ${child.tsTypeStr}`;
       tsTypeStrWithHighlight += `${highlightKey}: ${child.tsTypeStrWithHighlight}`;
-      if (type === "array") {
-        tsTypeStr += "[]\n";
-        tsTypeStrWithHighlight += "[]\n";
+      if (type === 'array') {
+        tsTypeStr += '[]\n';
+        tsTypeStrWithHighlight += '[]\n';
       } else {
-        tsTypeStr += "\n";
-        tsTypeStrWithHighlight += "\n";
+        tsTypeStr += '\n';
+        tsTypeStrWithHighlight += '\n';
       }
     } else {
-      if (type === "array" && schema) {
+      if (type === 'array' && schema) {
         const tsType = javaTypeToTsType(schema);
         tsTypeStr += `${key}: ${tsType}[]\n`;
         tsTypeStrWithHighlight += `${highlightKey}: <span class="primitiveType">${tsType}</span>[]\n`;
@@ -681,57 +685,57 @@ function createTsTypeFromTrTree(
 /** 获取表格行的嵌套级别 */
 function getTrLevel(tr: HTMLTableRowElement) {
   const levelMatch = tr.className.match(/ant-table-row-level-\d/);
-  const level = Number(levelMatch[0].replace("ant-table-row-level-", ""));
+  const level = Number(levelMatch[0].replace('ant-table-row-level-', ''));
   return level;
 }
 
 /** 将java的类型转为ts的基础类型 */
 function javaTypeToTsType(javaType: string) {
-  if (javaType.includes("string")) return "string";
-  if (javaType.includes("integer")) return "number";
-  if (javaType.includes("boolean")) return "boolean";
-  if (javaType.includes("file")) return "File";
-  if (javaType.includes("number")) return "number";
-  return "unknownType";
+  if (javaType.includes('string')) return 'string';
+  if (javaType.includes('integer')) return 'number';
+  if (javaType.includes('boolean')) return 'boolean';
+  if (javaType.includes('file')) return 'File';
+  if (javaType.includes('number')) return 'number';
+  return 'unknownType';
 }
 
 /** 让选中的菜单项滚动到视图中间 */
 async function scrollSelectMenuIntoView() {
-  const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
+  const menu = (await waitElement('.knife4j-menu', 10, 0.5))?.[0];
   if (!menu) return;
 
   const selectItem = (
-    await waitElement(".ant-menu-item-selected", 10, 0.5)
+    await waitElement('.ant-menu-item-selected', 10, 0.5)
   )?.[0];
   if (selectItem) {
     setTimeout(() => {
-      selectItem.scrollIntoView({ behavior: "smooth", block: "center" });
+      selectItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 500);
   }
 }
 
 /** 生成菜单搜索栏 */
 async function generateMenuSearchBar(apiDocs: ApiDoc) {
-  const menu = (await waitElement(".knife4j-menu", 10, 0.5))?.[0];
+  const menu = (await waitElement('.knife4j-menu', 10, 0.5))?.[0];
   if (!menu) return;
 
-  const form = document.createElement("div");
-  form.className = "layui-form layui-row layui-col-space16";
-  const select = document.createElement("select");
-  select.setAttribute("lay-search", "");
-  select.setAttribute("lay-filter", "handleSelect");
+  const form = document.createElement('div');
+  form.className = 'layui-form layui-row layui-col-space16';
+  const select = document.createElement('select');
+  select.setAttribute('lay-search', '');
+  select.setAttribute('lay-filter', 'handleSelect');
   form.appendChild(select);
   const paths = apiDocs.paths;
-  const option = document.createElement("option");
-  option.innerText = "请搜索";
-  option.value = "请搜索";
+  const option = document.createElement('option');
+  option.innerText = '请搜索';
+  option.value = '请搜索';
   select.appendChild(option);
   Object.entries(paths).forEach(([path, methods]) => {
     Object.entries(methods).forEach(
       ([method, { tags, summary, deprecated }]) => {
-        const option = document.createElement("option");
+        const option = document.createElement('option');
         let innerHTML = `<span class="method method-${method}">${method.toUpperCase()}</span> ${tags.join(
-          " / "
+          ' / '
         )} / ${summary}`;
         if (deprecated === true) {
           innerHTML = `<del>${innerHTML}</del>`;
@@ -739,14 +743,14 @@ async function generateMenuSearchBar(apiDocs: ApiDoc) {
         option.innerHTML = innerHTML;
         option.value = [...tags, summary]
           .map((item) => encodeURIComponent(item))
-          .join("/");
+          .join('/');
         select.appendChild(option);
       }
     );
   });
   menu.parentElement.insertBefore(form, menu);
-  menu.setAttribute("style", "height: calc(100vh - 64px - 54px);");
-  form.setAttribute("style", "margin: -15px -3px 0 8px");
+  menu.setAttribute('style', 'height: calc(100vh - 64px - 54px);');
+  form.setAttribute('style', 'margin: -15px -3px 0 8px');
 
   // @ts-ignore
   layui.form.render();
@@ -755,9 +759,9 @@ async function generateMenuSearchBar(apiDocs: ApiDoc) {
     // @ts-ignore
     const form = layui.form;
     // 监听 select 事件， 选中后找相应的一个菜单项进行 模拟点击
-    form.on("select(handleSelect)", async function (data) {
+    form.on('select(handleSelect)', async function (data) {
       const value = data.value as string; // 获得被选中的值
-      const paths = value.split("/").map((item) => decodeURIComponent(item));
+      const paths = value.split('/').map((item) => decodeURIComponent(item));
       let parentDom = menu;
       for (const path of paths) {
         const liList = Array.from(
@@ -765,7 +769,7 @@ async function generateMenuSearchBar(apiDocs: ApiDoc) {
         ) as HTMLSpanElement[];
         const li = liList.find((li) => li.innerText.includes(path));
         if (!li) break;
-        li?.getElementsByTagName("span")?.[0].click();
+        li?.getElementsByTagName('span')?.[0].click();
         await waitTime(100);
         parentDom = li;
       }
@@ -774,8 +778,8 @@ async function generateMenuSearchBar(apiDocs: ApiDoc) {
   });
   // layui中如果 options 的内容不是纯文本， 会额外多出一些无效选项， 移除这个无效选项
   setTimeout(() => {
-    Array.from(form.querySelectorAll(".layui-anim dd") || []).forEach((dd) => {
-      const span = dd.getElementsByTagName("span")?.[0];
+    Array.from(form.querySelectorAll('.layui-anim dd') || []).forEach((dd) => {
+      const span = dd.getElementsByTagName('span')?.[0];
       if (span) return;
       dd.remove();
     });
@@ -793,8 +797,8 @@ function interceptApiDocs(): Promise<ApiDoc> {
   };
   return new Promise((resolve, reject) => {
     XMLHttpRequest.prototype.send = function () {
-      this.addEventListener("load", function () {
-        if (this._url.includes("v2/api-docs")) {
+      this.addEventListener('load', function () {
+        if (this._url.includes('v2/api-docs')) {
           // 拦截到的响应数据
           const response = this.responseText;
           try {
@@ -811,21 +815,155 @@ function interceptApiDocs(): Promise<ApiDoc> {
   });
 }
 
+function getReplacePathConfig() {
+  let replaceList: {
+    key: string;
+    form: string;
+    to: string;
+    enable: boolean;
+  }[] = [];
+  try {
+    replaceList = JSON.parse(localStorage.getItem('replacePathList') || '[]');
+  } catch (error) {}
+  return replaceList;
+}
+
+/** 替换接口路径的配置功能 */
+function renderReplacePathConfig() {
+  let dialog = document.getElementById(componentId.replacePathConfigDialog);
+  if (!dialog) {
+    dialog = document.createElement('dialog');
+    dialog.id = componentId.replacePathConfigDialog;
+  }
+  const replaceList = getReplacePathConfig();
+  const onChange = () => {
+    localStorage.setItem('replacePathList', JSON.stringify(replaceList));
+    currentActiveTabPanel && replacePath(currentActiveTabPanel);
+  };
+  const renderRow = ({ enable, form, key, to }: (typeof replaceList)[0]) => {
+    const row = document.createElement('div');
+    const formInput = document.createElement('input');
+    const toInput = document.createElement('input');
+    const enableBtn = document.createElement('button');
+    const delBtn = document.createElement('button');
+    formInput.value = form;
+    toInput.value = to;
+    enableBtn.innerText = enable ? '启用中' : '停用中';
+    delBtn.innerText = '删除';
+    formInput.oninput = () => {
+      const item = replaceList.find((item) => item.key === key);
+      item.form = formInput.value;
+      console.log('replaceList');
+      onChange();
+    };
+    toInput.oninput = () => {
+      const item = replaceList.find((item) => item.key === key);
+      item.to = toInput.value;
+      onChange();
+    };
+    enableBtn.onclick = () => {
+      const item = replaceList.find((item) => item.key === key);
+      item.enable = !item.enable;
+      enableBtn.innerText = item.enable ? '启用中' : '停用中';
+      onChange();
+    };
+    delBtn.onclick = () => {
+      const index = replaceList.findIndex((item) => item.key === key);
+      replaceList.splice(index, 1);
+      onChange();
+      row.remove();
+    };
+    formInput.setAttribute('style', 'flex: 1;');
+    toInput.setAttribute('style', 'flex: 1;');
+    row.id = key;
+    row.appendChild(formInput);
+    row.appendChild(toInput);
+    row.appendChild(enableBtn);
+    row.appendChild(delBtn);
+    row.setAttribute('style', 'display: flex; align-items: center;');
+    return row;
+  };
+  const rowContain = document.createElement('div');
+  const addBtn = document.createElement('button');
+  addBtn.innerText = '添加';
+  addBtn.onclick = () => {
+    const newItem = {
+      enable: true,
+      form: '',
+      key: Date.now().toString(),
+      to: '',
+    };
+    replaceList.push(newItem);
+    const row = renderRow(newItem);
+    rowContain.appendChild(row);
+    onChange();
+  };
+  const closeBtn = document.createElement('button');
+  closeBtn.innerText = '关闭';
+  closeBtn.onclick = () => {
+    dialog.hidden = true;
+  };
+  dialog.appendChild(rowContain);
+  dialog.appendChild(addBtn);
+  dialog.appendChild(closeBtn);
+  replaceList.forEach((item) => {
+    const row = renderRow(item);
+    rowContain.appendChild(row);
+  });
+  let openDialogBtn = document.getElementById(componentId.openDialogBtn);
+  if (!openDialogBtn) {
+    openDialogBtn = document.createElement('button');
+    openDialogBtn.innerText = '路径替换配置';
+    openDialogBtn.setAttribute(
+      'style',
+      'position: absolute;top: 20px;left: 650px;z-index: 10000'
+    );
+    openDialogBtn.onclick = () => {
+      dialog.removeAttribute('hidden');
+    };
+  }
+  dialog.setAttribute('style', 'top: 30%; width: 500px; min-height: 100px');
+  dialog.setAttribute('hidden', '');
+  document.body.appendChild(openDialogBtn);
+  document.body.appendChild(dialog);
+}
+
 /** 替换原本的接口路径 */
 async function replacePath(activeTabPanel: Element) {
-  const pathEl = (await waitElement(
-    ".knife4j-api-summary-path",
+  const originPathEl = (await waitElement(
+    '.knife4j-api-summary-path',
     10,
     0.5,
     activeTabPanel
   )) as HTMLSpanElement[];
-  if (!pathEl[0]) return;
-  let path = pathEl[0].innerText;
-  path = path.replace("/e-commerce-api/", "/api/");
-  pathEl[0].innerText = path;
-  pathEl[0].onclick = () => {
+  if (!originPathEl[0]) return;
+  const replaceList = getReplacePathConfig();
+  const originPath = originPathEl[0].innerText;
+
+  let pathEl = originPathEl[0].parentElement.querySelector(
+    '.knife4j-api-summary-path-copy'
+  ) as HTMLSpanElement | null;
+  if (!pathEl) {
+    pathEl = originPathEl[0].cloneNode(true) as HTMLSpanElement;
+    pathEl.className = pathEl.className.replace(
+      'knife4j-api-summary-path',
+      'knife4j-api-summary-path-copy'
+    );
+    originPathEl[0].parentElement.appendChild(pathEl);
+    originPathEl[0].hidden = true;
+  }
+
+  let path = originPath;
+
+  replaceList.forEach(({ enable, form, to }) => {
+    console.log(form, to);
+    if (!enable) return;
+    path = path.replace(form, to);
+  });
+  pathEl.innerText = path;
+  pathEl.onclick = () => {
     navigator.clipboard.writeText(path);
-    message.success("已复制");
+    message.success('已复制');
   };
 }
 
@@ -839,14 +977,14 @@ class OtherPagePathSynchronizer {
     this.responseSync = this.responseSync.bind(this);
 
     this.key = Date.now();
-    const key = sessionStorage.getItem("key");
+    const key = sessionStorage.getItem('key');
     if (key) {
       this.key = Number(key);
     } else {
       this.key = Date.now();
-      sessionStorage.setItem("key", this.key.toString());
+      sessionStorage.setItem('key', this.key.toString());
     }
-    window.addEventListener("storage", () => {
+    window.addEventListener('storage', () => {
       this.responseSync();
     });
   }
@@ -860,14 +998,15 @@ class OtherPagePathSynchronizer {
   }
 
   mount() {
-    const syncButton = document.createElement("span");
+    const syncButton = document.createElement('span');
     syncButton.setAttribute(
-      "style",
-      "border:0; color: white; background: #1890ff; border-radius: 4px; cursor: pointer;padding: 2px 4px;"
+      'style',
+      'border:0; color: white; background: #1890ff; border-radius: 4px; cursor: pointer;padding: 2px 4px;'
     );
-    syncButton.innerText = "同步其他页面";
+    syncButton.id = componentId.syncButton;
+    syncButton.innerText = '同步其他页面';
     syncButton.onclick = this.syncOtherPage;
-    document.querySelectorAll(".header")?.[0]?.appendChild(syncButton);
+    document.querySelectorAll('.header')?.[0]?.appendChild(syncButton);
   }
 
   async syncOtherPage() {
@@ -895,7 +1034,7 @@ class OtherPagePathSynchronizer {
       await waitTime(500);
     }
     scrollSelectMenuIntoView();
-    message.success("同步完成");
+    message.success('同步完成');
   }
 
   responseSync() {
@@ -931,10 +1070,10 @@ const restoreApiPath = async () => {
 const getHideNullComment = () => {
   const hideNullCommentStr = localStorage.getItem(storageKey.hideNullComment);
   if (!hideNullCommentStr) {
-    localStorage.setItem(storageKey.hideNullComment, "true");
+    localStorage.setItem(storageKey.hideNullComment, 'true');
     return true;
   }
-  if (hideNullCommentStr === "true") {
+  if (hideNullCommentStr === 'true') {
     return true;
   }
   return false;
@@ -943,36 +1082,37 @@ const getHideNullComment = () => {
 const onTabListChange = async () => {
   // 找到当前显示的tab
   const activeTabPanelList = await waitElement(
-    ".knife4j-tab>.ant-tabs-content>div[aria-hidden=false]",
+    '.knife4j-tab>.ant-tabs-content>div[aria-hidden=false]',
     10,
     0.5
   );
 
   if (!activeTabPanelList || activeTabPanelList.length <= 0) {
-    message.error("没有找到激活中的tab");
+    message.error('没有找到激活中的tab');
     return;
   }
 
   generateTsType(activeTabPanelList[0]);
   replacePath(activeTabPanelList[0]);
+  currentActiveTabPanel = activeTabPanelList[0];
 
   const tabSpanList = document.querySelectorAll(
-    ".ant-tabs-top-bar .ant-tabs-tab span"
+    '.ant-tabs-top-bar .ant-tabs-tab span'
   );
   const activeTabSpan = document.querySelector<HTMLSpanElement>(
-    ".ant-tabs-top-bar .ant-tabs-tab-active span"
+    '.ant-tabs-top-bar .ant-tabs-tab-active span'
   );
 
   try {
     const apiTabMap: Record<string, string> = {
-      [activeTabSpan.getAttribute("pagekey")]: location.href,
+      [activeTabSpan.getAttribute('pagekey')]: location.href,
     };
     const currentPageOpenApiTabMapStr =
-      sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) || "{}";
+      sessionStorage.getItem(storageKey.currentPageOpenApiTabMap) || '{}';
     const currentPageOpenApiTabMap = JSON.parse(currentPageOpenApiTabMapStr);
     (Array.from(tabSpanList) as HTMLDivElement[]).forEach((span) => {
-      const pageKey = span.getAttribute("pagekey");
-      if (pageKey === "kmain") return;
+      const pageKey = span.getAttribute('pagekey');
+      if (pageKey === 'kmain') return;
       const api = currentPageOpenApiTabMap[pageKey];
       if (api) {
         apiTabMap[pageKey] = api;
@@ -988,23 +1128,24 @@ const onTabListChange = async () => {
 };
 
 (function () {
-  "use strict";
+  'use strict';
   if (window) {
     interceptApiDocs().then(
       async (apiDocs) => {
         // 直接用 @require 引入会导致字体文件用了当前网页的域名去加载， 以至于加载失败
-        const script = document.createElement("script");
-        script.src = "//unpkg.com/layui@2.9.10/dist/layui.js";
-        const styles = document.createElement("link");
-        styles.href = "//unpkg.com/layui@2.9.10/dist/css/layui.css";
-        styles.rel = "stylesheet";
+        const script = document.createElement('script');
+        script.src = '//unpkg.com/layui@2.9.10/dist/layui.js';
+        const styles = document.createElement('link');
+        styles.href = '//unpkg.com/layui@2.9.10/dist/css/layui.css';
+        styles.rel = 'stylesheet';
         document.body.appendChild(script);
         document.body.appendChild(styles);
 
         const tabList = (
-          await waitElement(".knife4j-tab>div[role=tablist]", 10, 0.5)
+          await waitElement('.knife4j-tab>div[role=tablist]', 10, 0.5)
         )?.[0];
         if (!tabList) return;
+        renderReplacePathConfig();
         // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
         const observer = new MutationObserver(onTabListChange);
         const config = { childList: true, subtree: true };
@@ -1022,7 +1163,7 @@ const onTabListChange = async () => {
         generateMenuSearchBar(apiDocs);
       },
       () => {
-        message.error("拦截接口数据失败");
+        message.error('拦截接口数据失败');
       }
     );
   }
