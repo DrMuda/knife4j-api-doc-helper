@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Knife4j-v4.5.0接口文档功能增强
 // @namespace    http://tampermonkey.net/
-// @version      2025-03-04
+// @version      2025-03-05
 // @description 1. 在 knife4j-v4.5.0 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
 // @author       DrMuda
 // @match        http://*/doc.html
@@ -83,6 +83,8 @@ const componentId = {
   replacePathConfigDialog: 'replacePathConfigDialog',
   openDialogBtn: 'openDialogBtn',
   syncButton: 'syncButton',
+  responseAllPartialSwitch: 'responseAllPartialSwitch',
+  requestAllPartialSwitch: 'requestAllPartialSwitch',
 };
 /** 缩进空格数量 */
 const indentSpaces = 2;
@@ -103,6 +105,8 @@ const storageKey = {
   requestSyncPageKey: 'requestSyncPageKey',
   responseSync: 'responseSync',
   hideNullComment: 'hideNullComment',
+  requestAllPartial: 'requestAllPartial',
+  responseAllPartial: 'responseAllPartial',
 };
 const heartbeatTimeout = 1500;
 let currentActiveTabPanel = null;
@@ -135,6 +139,15 @@ const originTsTypeHtmlStr = `
           lay-filter="${componentId.requestCommentSwitch}"
           checked
         />
+        <input
+          class="${componentId.requestAllPartialSwitch}"
+          type="checkbox"
+          name="requestAllPartialSwitch"
+          title="全部可选|按接口定义"
+          lay-skin="switch"
+          lay-filter="${componentId.requestAllPartialSwitch}"
+          checked
+        />
       </div>
       <pre
         class="type-content"
@@ -152,6 +165,15 @@ const originTsTypeHtmlStr = `
           title="显示注释|隐藏注释"
           lay-skin="switch"
           lay-filter="${componentId.responseCommentSwitch}"
+          checked
+        />
+        <input
+          class="${componentId.responseAllPartialSwitch}"
+          type="checkbox"
+          name="responseAllPartialSwitch"
+          title="全部可选|按接口定义"
+          lay-skin="switch"
+          lay-filter="${componentId.responseAllPartialSwitch}"
           checked
         />
       </div>
@@ -292,14 +314,24 @@ async function setMyDom(parentDom) {
   const tabId = Date.now();
   const requestCommentSwitchId = `${tabId}_${componentId.requestCommentSwitch}`;
   const responseCommentSwitchId = `${tabId}_${componentId.responseCommentSwitch}`;
+  const requestAllPartialSwitchId = `${tabId}_${componentId.requestAllPartialSwitch}`;
+  const responseAllPartialSwitchId = `${tabId}_${componentId.responseAllPartialSwitch}`;
   const tsTypeHtmlStr = originTsTypeHtmlStr
-    .replace(
+    .replaceAll(
       `lay-filter="${componentId.requestCommentSwitch}"`,
       `lay-filter="${requestCommentSwitchId}"`
     )
-    .replace(
+    .replaceAll(
       `lay-filter="${componentId.responseCommentSwitch}"`,
       `lay-filter="${responseCommentSwitchId}"`
+    )
+    .replaceAll(
+      `lay-filter="${componentId.requestAllPartialSwitch}"`,
+      `lay-filter="${requestAllPartialSwitchId}"`
+    )
+    .replaceAll(
+      `lay-filter="${componentId.responseAllPartialSwitch}"`,
+      `lay-filter="${responseAllPartialSwitchId}"`
     );
   const titleContain = targetDom.parentElement;
   const documentDom = targetDom.parentElement.parentElement;
@@ -329,6 +361,30 @@ async function setMyDom(parentDom) {
       item.removeAttribute('checked');
     }
   });
+  const requestAllPartialSwitch = await waitElement(
+    `.${componentId.requestAllPartialSwitch}`,
+    2,
+    0.1
+  );
+  requestAllPartialSwitch.forEach((item) => {
+    if (getRequestAllPartial()) {
+      item.setAttribute('checked', 'true');
+    } else {
+      item.removeAttribute('checked');
+    }
+  });
+  const responseAllPartialSwitch = await waitElement(
+    `.${componentId.responseAllPartialSwitch}`,
+    2,
+    0.1
+  );
+  responseAllPartialSwitch.forEach((item) => {
+    if (getResponseAllPartial()) {
+      item.setAttribute('checked', 'true');
+    } else {
+      item.removeAttribute('checked');
+    }
+  });
   // @ts-ignore
   layui.form.render();
   const id = componentId;
@@ -349,11 +405,14 @@ async function setMyDom(parentDom) {
   const setType = (
     type,
     /** 是否带上注释 */
-    withComment,
-    /** 是否隐藏空注释 */
-    hideNullComment
+    withComment
   ) => {
     const table = type === 'request' ? requestTypeTable : responseTypeTable;
+    const hideNullComment = getHideNullComment();
+    const isAllPartial = {
+      request: getRequestAllPartial(),
+      response: getResponseAllPartial(),
+    }[type];
     const colNumConfig =
       type === 'request'
         ? {
@@ -386,6 +445,7 @@ async function setMyDom(parentDom) {
         colNumConfig,
         withComment,
         hideNullComment,
+        isAllPartial,
       }
     );
     typeContent.innerHTML = `<span class="keyword">interface</span> <span class="typeName">Data</span> ${tsTypeStrWithHighlight}`;
@@ -396,8 +456,8 @@ async function setMyDom(parentDom) {
   };
   let prevRequestTypeTableInnerHtml = requestTypeTable.innerHTML;
   let prevResponseTypeTableInnerHtml = responseTypeTable.innerHTML;
-  setType('request', true, getHideNullComment());
-  setType('response', true, getHideNullComment());
+  setType('request', true);
+  setType('response', true);
   // 注册 注释开关事件
   // @ts-ignore
   layui.use(function () {
@@ -410,39 +470,45 @@ async function setMyDom(parentDom) {
     form.on(`switch(${requestCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType('request', true, getHideNullComment());
+        setType('request', true);
         checkedStatus.requestCommentSwitchId = true;
       }
       if (checked === false) {
-        setType('request', false, getHideNullComment());
+        setType('request', false);
         checkedStatus.requestCommentSwitchId = false;
       }
     });
     form.on(`switch(${responseCommentSwitchId})`, function (data) {
       const checked = data?.elem?.checked;
       if (checked === true) {
-        setType('response', true, getHideNullComment());
+        setType('response', true);
         checkedStatus.responseCommentSwitchId = true;
       }
       if (checked === false) {
-        setType('response', false, getHideNullComment());
+        setType('response', false);
         checkedStatus.responseCommentSwitchId = false;
       }
+    });
+    form.on(`switch(${requestAllPartialSwitchId})`, function (data) {
+      const checked = data?.elem?.checked;
+      const checkedStr = checked ? 'true' : 'false';
+      localStorage.setItem(storageKey.requestAllPartial, checkedStr);
+      setType('request', checkedStatus.requestCommentSwitchId);
+    });
+    form.on(`switch(${responseAllPartialSwitchId})`, function (data) {
+      const checked = data?.elem?.checked;
+      const checkedStr = checked ? 'true' : 'false';
+      localStorage.setItem(storageKey.responseAllPartial, checkedStr);
+      setType('response', checkedStatus.responseCommentSwitchId);
     });
     form.on(
       `checkbox(${componentId.hideNullCommentCheckbox})`,
       function (data) {
         const checked = data?.elem?.checked;
-        if (checked === true) {
-          localStorage.setItem(storageKey.hideNullComment, 'true');
-          setType('request', checkedStatus.requestCommentSwitchId, true);
-          setType('response', checkedStatus.responseCommentSwitchId, true);
-        }
-        if (checked === false) {
-          localStorage.setItem(storageKey.hideNullComment, 'false');
-          setType('request', checkedStatus.responseCommentSwitchId, false);
-          setType('response', checkedStatus.responseCommentSwitchId, false);
-        }
+        const checkedStr = checked ? 'true' : 'false';
+        localStorage.setItem(storageKey.hideNullComment, checkedStr);
+        setType('request', checkedStatus.requestCommentSwitchId);
+        setType('response', checkedStatus.responseCommentSwitchId);
       }
     );
   });
@@ -455,11 +521,11 @@ async function setMyDom(parentDom) {
       let newResponseTypeTable = getTableDom('response', documentDom);
       if (newRequestTypeTable.innerHTML !== prevRequestTypeTableInnerHtml) {
         requestTypeTable = newRequestTypeTable;
-        setType('request', true, getHideNullComment());
+        setType('request', true);
       }
       if (newResponseTypeTable.innerHTML !== prevResponseTypeTableInnerHtml) {
         responseTypeTable = newResponseTypeTable;
-        setType('response', true, getHideNullComment());
+        setType('response', true);
       }
     }
   });
@@ -520,7 +586,7 @@ function createTrTree(trList) {
 function createTsTypeFromTrTree(trTree, config, level = 1) {
   let tsTypeStr = '{\n';
   let tsTypeStrWithHighlight = '{\n';
-  const { colNumConfig, hideNullComment, withComment } = config;
+  const { colNumConfig, hideNullComment, withComment, isAllPartial } = config;
   /** 缩进 */
   const indent = new Array(level * indentSpaces).fill(' ').join('');
   for (const { ele, children = [] } of trTree) {
@@ -530,7 +596,7 @@ function createTsTypeFromTrTree(trTree, config, level = 1) {
     const isRequired = tdList[colNumConfig.isRequired]?.innerText || 'true';
     const type = tdList[colNumConfig.type]?.innerText;
     const schema = tdList[colNumConfig.schema]?.innerText;
-    const requiredChar = isRequired === 'false' ? '?' : '';
+    const requiredChar = isRequired === 'false' || isAllPartial ? '?' : '';
     const key = `${indent}${fieldName}${requiredChar}`;
     const highlightKey = `${indent}<span class="property" >${fieldName}</span>${requiredChar}`;
     // 注释
@@ -721,7 +787,6 @@ function renderReplacePathConfig() {
     formInput.oninput = () => {
       const item = replaceList.find((item) => item.key === key);
       item.form = formInput.value;
-      console.log('replaceList');
       onChange();
     };
     toInput.oninput = () => {
@@ -820,7 +885,6 @@ async function replacePath(activeTabPanel) {
   }
   let path = originPath;
   replaceList.forEach(({ enable, form, to }) => {
-    console.log(form, to);
     if (!enable) return;
     path = path.replace(form, to);
   });
@@ -929,6 +993,32 @@ const getHideNullComment = () => {
     return true;
   }
   if (hideNullCommentStr === 'true') {
+    return true;
+  }
+  return false;
+};
+const getRequestAllPartial = () => {
+  const requestAllPartialStr = localStorage.getItem(
+    storageKey.requestAllPartial
+  );
+  if (!requestAllPartialStr) {
+    localStorage.setItem(storageKey.requestAllPartial, 'false');
+    return false;
+  }
+  if (requestAllPartialStr === 'true') {
+    return true;
+  }
+  return false;
+};
+const getResponseAllPartial = () => {
+  const responseAllPartialStr = localStorage.getItem(
+    storageKey.responseAllPartial
+  );
+  if (!responseAllPartialStr) {
+    localStorage.setItem(storageKey.responseAllPartial, 'true');
+    return true;
+  }
+  if (responseAllPartialStr === 'true') {
     return true;
   }
   return false;
