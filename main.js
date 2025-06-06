@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Knife4j-v3.0.3接口文档功能增强
+// @name         Knife4j 接口文档功能增强
 // @namespace    http://tampermonkey.net/
 // @version      2025-03-05
-// @description 1. 在 knife4j-v3.0.3 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
+// @description  当前兼容版本： v3.0.3、 v4.5.0。 1. 在 knife4j-v3.0.3 的接口文档页面生成请求参数与响应参数的 TS 类型 2. 增加菜单筛选栏 3. 自动滚动选中的菜单项到视图中间 4. 接口路径前缀替换与点击复制 5. 同步多个标签页打开的接口， 点击顶部同步按钮开始同步
 // @author       DrMuda
 // @match        http://*/doc.html
 // @match        https://*/doc.html
@@ -740,7 +740,8 @@ function interceptApiDocs() {
   return new Promise((resolve, reject) => {
     XMLHttpRequest.prototype.send = function () {
       this.addEventListener('load', function () {
-        if (this._url.includes('v3/api-docs')) {
+        const apiPathTest = /v\d+\/api-docs/;
+        if (apiPathTest.test(this._url)) {
           // 拦截到的响应数据
           const response = this.responseText;
           try {
@@ -1085,8 +1086,10 @@ const onTabListChange = async () => {
         )?.[0];
         if (!tabList) return;
         renderReplacePathConfig();
-        // 手动触发一次， 用在初始tab无法监听变化时， 生成元素
-        onTabListChange();
+        // 主动触发一次， 用在初始tab无法监听变化时， 生成元素
+        setTimeout(() => {
+          onTabListChange();
+        }, 1000);
         // 监听tab变化， 当打开一个新tab时， 会触发多次监听回调
         const observer = new MutationObserver(onTabListChange);
         const config = { childList: true, subtree: true };
